@@ -139,6 +139,7 @@ def _load_block() -> None:
     if until > time.time():
         state["blocked_until"] = until
         state["last_error"] = _block_message(until)
+        state["now"] = {"authorized": spotify.TOKEN_FILE.exists(), "playing": False}
 
 
 async def run() -> None:
