@@ -18,6 +18,12 @@ git archive HEAD | ssh -i "$KEY" -o BatchMode=yes "$HOST" '
   systemctl --user daemon-reload
   systemctl --user enable hub-musical >/dev/null 2>&1
   systemctl --user restart hub-musical
-  sleep 2
-  systemctl --user is-active hub-musical
+  # Só dá como publicado quando o servidor responde (um erro na inicialização aparece aqui)
+  for i in $(seq 20); do
+    .venv/bin/python -c "import httpx; httpx.get(\"http://127.0.0.1:8888/health\").raise_for_status()" 2>/dev/null && { echo active; exit 0; }
+    sleep 1
+  done
+  echo "O servidor não subiu. Últimas linhas do registro:"
+  journalctl --user -u hub-musical -n 15 --no-pager
+  exit 1
 '
