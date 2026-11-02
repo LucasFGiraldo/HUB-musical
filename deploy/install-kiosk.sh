@@ -21,8 +21,8 @@ sudo apt install -y cage chromium
 
 echo "2/3 Login automático do usuário $USER na tela do Dell (tty1)..."
 sudo mkdir -p "$(dirname "$OVERRIDE")"
-printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM\n' "$USER" \
-  | sudo tee "$OVERRIDE" >/dev/null
+printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM\n' "$USER" |
+  sudo tee "$OVERRIDE" >/dev/null
 
 echo "3/3 Abrindo o quiosque ao entrar na tela do Dell (só no tty1; o SSH não é afetado)..."
 touch ~/.bash_profile
