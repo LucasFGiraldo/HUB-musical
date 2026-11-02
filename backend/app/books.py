@@ -35,7 +35,7 @@ fragment ub on user_books {
 """ % (READING_MAX, TOTAL_MAX)
 
 state = {"status": "sem token", "reading": [], "read": [], "updated_at": None}
-_client = httpx.Client(timeout=20, headers={"User-Agent": "HUB Musical (tela pessoal de música e leituras)"})
+_client = httpx.Client(timeout=20, headers={"User-Agent": "HUB Musical (tela pessoal de musica e leituras)"})  # cabeçalho: só ASCII
 
 
 def snapshot() -> dict:
