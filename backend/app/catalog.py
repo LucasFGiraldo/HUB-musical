@@ -85,7 +85,9 @@ def search(q: str) -> list[dict]:
         results.append({
             "work": doc.get("key"), "edition": ed.get("key"),
             "title": fix_text(ed.get("title") or doc.get("title")), "authors": _authors(doc.get("author_name")),
-            "publisher": fix_text((ed.get("publisher") or [None])[0]), "year": str(doc.get("first_publish_year") or ""),
+            # o ano da edição vem depois (edition_details); first_year é o da obra original, só para mostrar
+            "publisher": fix_text((ed.get("publisher") or [None])[0]), "year": "",
+            "first_year": str(doc.get("first_publish_year") or ""),
             "pages": doc.get("number_of_pages_median"), "isbn": _isbn(ed.get("isbn")),
             "portuguese": "por" in (ed.get("language") or []),
             "cover_url": cover_url(cover, "L"), "thumb": cover_url(cover, "M"),
