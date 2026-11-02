@@ -171,7 +171,7 @@ def status():
         "mic": listener.status,
         "spotify_device": s["device"],
         "books": {"status": books.state["status"], "updated_at": books.state["updated_at"],
-                  "reading": len(books.state["reading"]), "read": len(books.state["read"])},
+                  "reading": len(books.state["reading"]), "read": books.state["read_count"]},
     }
 
 
