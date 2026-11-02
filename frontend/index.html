@@ -562,11 +562,11 @@ function renderBooks(data) {
     fig.style.setProperty("--i", i);
     const img = document.createElement("img"); img.src = b.cover; img.alt = "";
     fig.append(img);
-    if (b.reading) {
-      const track = document.createElement("div"); track.className = "track";
-      const fill = document.createElement("i"); fill.style.width = `${Math.round((b.progress || 0) * 100)}%`;
-      track.append(fill); fig.append(track);
-    }
+    // A barra de progresso só aparece em "lendo"; nos lidos fica invisível para alinhar as capas
+    const track = document.createElement("div"); track.className = "track";
+    const fill = document.createElement("i"); fill.style.width = `${Math.round((b.progress || 0) * 100)}%`;
+    if (!b.reading) track.style.visibility = "hidden";
+    track.append(fill); fig.append(track);
     const cap = document.createElement("figcaption"); cap.textContent = b.title;
     fig.append(cap);
     return fig;
