@@ -1,0 +1,19 @@
+# Segredos e configuração local
+.env
+*.token
+tokens.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Dados gerados pelo servidor
+data/
+*.db
+
+# Editor / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
