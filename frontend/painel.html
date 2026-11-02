@@ -863,7 +863,7 @@ async function loadLibrary() {
   $("f-books-pages").textContent = lib.period_pages.toLocaleString("pt-BR");
   $("f-books-pace").textContent = String(lib.pace).replace(".", ",");
   $("shelf-summary").textContent = lib.total
-    ? `${lib.total} ${lib.total === 1 ? "livro" : "livros"} na estante · ${lib.counts.read} lidos · ${lib.counts.want} na fila · ${lib.owned} que você tem`
+    ? `${lib.total} ${lib.total === 1 ? "livro" : "livros"} na estante · ${lib.counts.read} ${lib.counts.read === 1 ? "lido" : "lidos"} ·${lib.counts.want} na fila · ${lib.owned} que você tem`
     : "A estante ainda está vazia. Adicione livros na aba Leituras.";
   const max = Math.max(1, ...lib.per_day.map((d) => d.pages));
   const plot = $("plot-pages"); plot.replaceChildren();

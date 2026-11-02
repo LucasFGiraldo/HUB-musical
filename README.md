@@ -48,6 +48,13 @@ a partir do `~/.bash_profile` do usuário `lucas`. Para sair do quiosque pelo SS
   `portas_lan` no `/etc/nftables.conf`), SSH só por chave e sem root, atualizações de segurança automáticas.
 - Automação nova: um serviço de usuário próprio, numa porta própria, acrescentada em `portas_lan`.
 
+## Leituras (estante no painel)
+A aba **Leituras** do painel é a estante: busca no Open Library (título, autor, ISBN ou foto do código de barras),
+escolha da edição, situação (Quero ler, Lendo, Lido, Relendo, Pausado, Abandonado), marcadores (Tenho, Favorito,
+Desejado, Emprestado), página atual, datas, nota e observações. As capas ficam em `data/covers/` (foto, imagem ou link).
+Código em `backend/app/shelf.py` (estante, tabelas `books`, `book_reads`, `book_progress`) e `catalog.py` (Open Library,
+capas, código de barras). Escritas pedem o PIN. Exportação em CSV nos Ajustes.
+
 ## Banco de dados
 SQLite em `~/hub-musical/data/hub.db` no Dell (não é Supabase; é um arquivo local). Consultar pelo SSH:
 `sqlite3 -readonly ~/hub-musical/data/hub.db "select * from plays order by id desc limit 10"`.
