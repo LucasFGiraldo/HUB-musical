@@ -4,7 +4,7 @@
 #   cage      = "compositor" Wayland mínimo: mostra um único aplicativo em tela cheia, sem área de trabalho
 #   chromium  = navegador em --kiosk (sem barra de endereço, abas ou menus)
 # -m last: com um monitor HDMI ligado, usa só ele (sem HDMI, usa a tela do notebook)
-URL="${HUB_KIOSK_URL:-http://127.0.0.1:8888/}"
+URL="${HUB_KIOSK_URL:-http://127.0.0.1:8888/?quiosque}"  # ?quiosque esconde o cursor
 PROFILE="$HOME/.local/share/hub-kiosk"
 
 # Espera o servidor do HUB responder (no boot ele pode subir depois)

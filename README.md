@@ -32,6 +32,8 @@ O modelo `backend/models/yamnet.tflite` e o `yamnet_class_map.csv` vêm do proje
 [now-playing](https://github.com/maurocastermans/now-playing) (MIT), que por sua vez usa o YAMNet do Google.
 
 ## Modo quiosque (tela do Dell)
+**Em espera:** não está instalado; será ativado quando a tela final chegar, com `bash ~/hub-musical/deploy/install-kiosk.sh`.
+
 `deploy/kiosk.sh` abre a tela em tela cheia com `cage` + `chromium --kiosk`. Ele roda no tty1, com login automático,
 a partir do `~/.bash_profile` do usuário `lucas`. Para sair do quiosque pelo SSH: `pkill cage` (ele volta sozinho em
 3 s; para parar de vez, comente a linha no `~/.bash_profile` e rode `pkill -f kiosk.sh`).

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HUB Musical</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<script>if (new URLSearchParams(location.search).has("quiosque")) document.documentElement.classList.add("kiosk");</script>
 <style>
   @font-face {
     font-family: "Bricolage Grotesque";
@@ -43,7 +44,9 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; overflow: hidden; cursor: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  /* O cursor só some na tela dedicada (o quiosque abre a página com ?quiosque) */
+  html.kiosk, html.kiosk body { cursor: none; }
   body {
     background: var(--bg);
     color: var(--ink);
