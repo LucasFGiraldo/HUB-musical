@@ -38,5 +38,20 @@ O modelo `backend/models/yamnet.tflite` e o `yamnet_class_map.csv` vêm do proje
 a partir do `~/.bash_profile` do usuário `lucas`. Para sair do quiosque pelo SSH: `pkill cage` (ele volta sozinho em
 3 s; para parar de vez, comente a linha no `~/.bash_profile` e rode `pkill -f kiosk.sh`).
 
+## Segurança
+- **Painel:** salvar ajustes exige um PIN (4 a 8 números), criado no primeiro "Salvar". Vale 30 dias por aparelho;
+  5 erros seguidos bloqueiam aquele aparelho por 5 min. Esqueceu: `rm ~/hub-musical/data/painel_pin.json` e crie outro.
+- **Login do Spotify** (`/auth/login`, `/callback`) só funciona pelo túnel SSH, nunca pela rede.
+- O servidor recusa endereços que não sejam `.local`, `localhost` ou IP da rede local (proteção contra DNS rebinding)
+  e manda cabeçalhos de segurança (CSP, sem iframe).
+- **Sistema** (`deploy/seguranca.sh`, rodado pelo Lucas com sudo): firewall nftables (só a rede local, portas em
+  `portas_lan` no `/etc/nftables.conf`), SSH só por chave e sem root, atualizações de segurança automáticas.
+- Automação nova: um serviço de usuário próprio, numa porta própria, acrescentada em `portas_lan`.
+
+## Banco de dados
+SQLite em `~/hub-musical/data/hub.db` no Dell (não é Supabase; é um arquivo local). Consultar pelo SSH:
+`sqlite3 -readonly ~/hub-musical/data/hub.db "select * from plays order by id desc limit 10"`.
+Ou copiar para o computador (`scp lucas@hub-automacoes.local:hub-musical/data/hub.db .`) e abrir no DB Browser for SQLite.
+
 ## Segredos
-Client ID, tokens e dados locais ficam fora do repositório (`.gitignore`).
+Client ID, tokens, PIN e dados locais ficam fora do repositório (`.gitignore`).
