@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>HUB Musical</title>
+  <style>
+    .disc { fill: #2b261f; }
+    .groove { fill: none; stroke: #cfc9b9; stroke-opacity: .24; stroke-width: 1.6; }
+    .label { fill: #a4532f; }
+    .wave { fill: #ddd6c4; }
+    @media (prefers-color-scheme: dark) {
+      .disc { fill: #ddd6c4; }
+      .groove { stroke: #2b261f; stroke-opacity: .28; }
+      .label { fill: #c0663f; }
+      .wave { fill: #2b261f; }
+    }
+  </style>
+  <!-- Disco de vinil cujo selo é uma onda de áudio: o HUB que ouve -->
+  <circle class="disc" cx="32" cy="32" r="30"/>
+  <circle class="groove" cx="32" cy="32" r="24.5"/>
+  <circle class="groove" cx="32" cy="32" r="19.5"/>
+  <circle class="label" cx="32" cy="32" r="13"/>
+  <rect class="wave" x="24.4" y="27.5" width="3.6" height="9" rx="1.8"/>
+  <rect class="wave" x="30.2" y="23" width="3.6" height="18" rx="1.8"/>
+  <rect class="wave" x="36" y="27.5" width="3.6" height="9" rx="1.8"/>
+</svg>
