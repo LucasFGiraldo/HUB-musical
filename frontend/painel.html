@@ -235,6 +235,7 @@
         <div class="meter" id="meter-agora"><div class="fill"></div><div class="mark"></div></div>
         <div class="meter-legend"><span>Quanto o som parece música</span><span class="pct">—</span></div>
       </div>
+      <div class="row"><span class="dot" id="st-books"></span><span class="what">Leituras</span><span class="val" id="v-books">—</span></div>
       <div class="row"><span class="dot" id="st-server"></span><span class="what">Servidor</span><span class="val" id="v-server">—</span></div>
     </div>
   </section>
@@ -325,6 +326,15 @@
           <label for="lyrics_enabled">Letra da música</label>
           <span class="switch"><input type="checkbox" id="lyrics_enabled" name="lyrics_enabled"><span></span></span>
           <div class="help">Mostra a letra sincronizada das músicas do Spotify, quando existe.</div>
+        </div>
+        <div class="field">
+          <label for="books_enabled">Leituras na tela de espera</label>
+          <span class="switch"><input type="checkbox" id="books_enabled" name="books_enabled"><span></span></span>
+          <div class="help">Alterna as últimas músicas com o que você está lendo e os últimos livros lidos no Hardcover.</div>
+        </div>
+        <div class="field">
+          <label for="idle_rotate_seconds">Trocar de página a cada</label>
+          <span class="num"><input type="number" id="idle_rotate_seconds" name="idle_rotate_seconds" min="5" max="120" step="1" inputmode="numeric"><span>s</span></span>
         </div>
       </div>
 
@@ -436,6 +446,11 @@ async function pollStatus() {
   $("v-mic").textContent = mic.error ? mic.error
     : [MIC_STATES[mic.state] || mic.state, mic.last_result && mic.last_result !== "não reconhecida" ? `último: ${mic.last_result}` : null]
         .filter(Boolean).join(" · ");
+  const b = s.books;
+  $("st-books").className = `dot ${b.status === "ok" ? "ok" : b.status === "sem token" ? "" : "bad"}`;
+  $("v-books").textContent = b.status === "sem token" ? "Hardcover não conectado (falta o token)"
+    : b.status !== "ok" ? `Hardcover: ${b.status}`
+    : `Hardcover · ${b.reading} lendo, ${b.read} lidos · atualizado às ${new Date(b.updated_at * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
   $("st-server").className = "dot ok";
   $("v-server").textContent = `No ar desde ${new Date(s.started_at * 1000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
   const score = mic.music_score;
@@ -545,11 +560,12 @@ async function loadStats() {
 
 /* ---------- Ajustes ---------- */
 const form = $("form");
-const NUM = ["music_seconds", "clip_seconds", "gap_seconds", "recheck_seconds", "silence_seconds"];
+const NUM = ["music_seconds", "clip_seconds", "gap_seconds", "recheck_seconds", "silence_seconds", "idle_rotate_seconds"];
 
 function fillForm(s) {
   $("mic_enabled").checked = s.mic_enabled;
   $("lyrics_enabled").checked = s.lyrics_enabled;
+  $("books_enabled").checked = s.books_enabled;
   $("music_threshold").value = s.music_threshold;
   for (const k of NUM) $(k).value = s[k];
   $("night_from").value = s.night_from;
@@ -565,6 +581,7 @@ function readForm() {
   const v = {
     mic_enabled: $("mic_enabled").checked,
     lyrics_enabled: $("lyrics_enabled").checked,
+    books_enabled: $("books_enabled").checked,
     music_threshold: Number($("music_threshold").value),
     night_from: $("night_from").value,
     day_from: $("day_from").value,

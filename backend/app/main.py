@@ -10,13 +10,13 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTe
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import auth, config, db, listener, lyrics, poller, settings, spotify
+from . import auth, books, config, db, listener, lyrics, poller, settings, spotify
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
-    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(listener.run())]
+    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(listener.run()), asyncio.create_task(books.run())]
     yield
     for task in tasks:
         task.cancel()
@@ -107,6 +107,7 @@ async def stream():
             yield f"event: now\ndata: {json.dumps(poller.current())}\n\n"
             yield f"event: listening\ndata: {json.dumps(poller.listening())}\n\n"
             yield f"event: settings\ndata: {settings.get().model_dump_json()}\n\n"
+            yield f"event: books\ndata: {json.dumps(books.snapshot())}\n\n"
             while True:
                 try:
                     event, data = await asyncio.wait_for(q.get(), timeout=15)
@@ -169,7 +170,15 @@ def status():
         "poll_seconds": poller.POLL_SECONDS,
         "mic": listener.status,
         "spotify_device": s["device"],
+        "books": {"status": books.state["status"], "updated_at": books.state["updated_at"],
+                  "reading": len(books.state["reading"]), "read": len(books.state["read"])},
     }
+
+
+@app.get("/api/books")
+def get_books():
+    """Leituras do Hardcover para a tela de espera (lendo agora + últimos lidos)."""
+    return books.snapshot()
 
 
 @app.get("/api/settings")

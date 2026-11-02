@@ -183,8 +183,30 @@
     margin-top: 1.4vmin; font-size: clamp(11px, 1.7vmin, 21px); font-weight: 420; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #recent figure.enter { animation: rise 1100ms var(--ease) both; animation-delay: calc(var(--i) * 110ms); }
+  #recent figure.enter, #books figure.enter { animation: rise 1100ms var(--ease) both; animation-delay: calc(var(--i) * 110ms); }
   @keyframes rise { from { opacity: 0; transform: translateY(2.4vmin); } to { opacity: 1; transform: none; } }
+
+  /* Páginas da espera (músicas / leituras), uma sobre a outra, trocando a cada N segundos */
+  #idle .body { display: grid; width: 100%; }
+  .page {
+    grid-area: 1 / 1; display: grid; place-items: center;
+    opacity: 0; visibility: hidden; transition: opacity 600ms var(--ease), visibility 0s linear 600ms;
+  }
+  .page.on { opacity: 1; visibility: visible; transition: opacity 600ms var(--ease) 300ms, visibility 0s; }
+
+  /* Leituras: capas em pé (livro) em vez de quadradas (disco); a barra marca o que está sendo lido */
+  #books { display: flex; justify-content: center; align-items: flex-end; gap: 3.4vmin; width: 100%; padding: 0 4vw; }
+  #books figure { margin: 0; width: min(13vw, 22vh); min-width: 0; }
+  #books img {
+    display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover;
+    border-radius: .3vmin .7vmin .7vmin .3vmin; box-shadow: 0 1.6vmin 4vmin -1.4vmin var(--shadow); background: var(--faint);
+  }
+  #books .track { margin-top: 1.4vmin; }
+  #books .track i { display: block; height: 100%; background: var(--rust); border-radius: 99px; }
+  #books figcaption {
+    margin-top: 1.2vmin; font-size: clamp(11px, 1.7vmin, 21px); font-weight: 420; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   #empty { width: 13vmin; height: 13vmin; color: var(--muted); opacity: .45; }
   #empty.hidden { display: none; }
@@ -232,14 +254,15 @@
     #sleeve { width: min(78vw, 42vh); }
     #info { max-width: 90vw; }
     #foot { flex-direction: column; }
-    #recent { flex-wrap: wrap; }
+    #recent, #books { flex-wrap: wrap; }
     #recent figure { width: min(26vw, 18vh); }
+    #books figure { width: min(22vw, 14vh); }
   }
 
   @media (prefers-reduced-motion: reduce) {
     :root { --fade: 200ms; }
     .bars i { animation: none; transform: scaleY(.6); }
-    #recent figure.enter { animation: none; }
+    #recent figure.enter, #books figure.enter { animation: none; }
     * { transition-duration: 200ms !important; }
   }
 </style>
@@ -297,8 +320,11 @@
 <section id="idle" class="view">
   <div id="clock">--:--</div>
   <div class="body">
-    <div id="recent"></div>
-    <svg id="empty" class="hidden"><use href="#i-vinyl"/></svg>
+    <div class="page on" id="p-music">
+      <div id="recent"></div>
+      <svg id="empty" class="hidden"><use href="#i-vinyl"/></svg>
+    </div>
+    <div class="page" id="p-books"><div id="books"></div></div>
   </div>
   <div id="status">
     <svg id="st-spotify" class="g"><use href="#i-spotify"/></svg>
@@ -522,6 +548,54 @@ async function refreshRecent() {
   }));
 }
 
+/* ---------- Espera: leituras do Hardcover, alternando com as músicas ---------- */
+
+let booksKey = null, booksOn = true, rotateMs = 10000, rotateTimer, page = "music";
+
+function renderBooks(data) {
+  const items = [...data.reading, ...data.read].filter((b) => b.cover);
+  const key = items.map((b) => `${b.id}:${b.progress ?? ""}`).join("|");
+  if (key === booksKey) return;
+  booksKey = key;
+  $("books").replaceChildren(...items.map((b, i) => {
+    const fig = document.createElement("figure");
+    fig.style.setProperty("--i", i);
+    const img = document.createElement("img"); img.src = b.cover; img.alt = "";
+    fig.append(img);
+    if (b.reading) {
+      const track = document.createElement("div"); track.className = "track";
+      const fill = document.createElement("i"); fill.style.width = `${Math.round((b.progress || 0) * 100)}%`;
+      track.append(fill); fig.append(track);
+    }
+    const cap = document.createElement("figcaption"); cap.textContent = b.title;
+    fig.append(cap);
+    return fig;
+  }));
+  if (!items.length && page === "books") showPage("music");
+}
+
+function showPage(name) {
+  page = name;
+  $("p-music").classList.toggle("on", name === "music");
+  $("p-books").classList.toggle("on", name === "books");
+  // As capas da página que entra sobem de novo, em sequência
+  for (const fig of $(name === "music" ? "recent" : "books").children) {
+    fig.classList.remove("enter"); void fig.offsetWidth; fig.classList.add("enter");
+  }
+}
+
+function rotate() {
+  const hasBooks = booksOn && $("books").children.length > 0;
+  const visible = $("idle").classList.contains("on") && !listening.active;
+  if (!hasBooks) { if (page !== "music") showPage("music"); return; }
+  if (visible) showPage(page === "music" ? "books" : "music");
+}
+
+function scheduleRotate() {
+  clearInterval(rotateTimer);
+  rotateTimer = setInterval(rotate, rotateMs);
+}
+
 async function refreshStatus() {
   try {
     const s = await fetch("/api/status").then((r) => r.json());
@@ -550,7 +624,11 @@ function connect() {
     NIGHT_FROM = toMinutes(s.night_from);
     DAY_FROM = toMinutes(s.day_from);
     applyTheme();
+    booksOn = s.books_enabled;
+    if (s.idle_rotate_seconds * 1000 !== rotateMs) { rotateMs = s.idle_rotate_seconds * 1000; scheduleRotate(); }
+    if (!booksOn && page === "books") showPage("music");
   });
+  es.addEventListener("books", (e) => renderBooks(JSON.parse(e.data)));
   es.addEventListener("error", () => { $("st-server").className = "bad"; });
 }
 
@@ -562,6 +640,7 @@ setInterval(renderProgress, 250);
 setInterval(renderTimer, 250);
 setInterval(updateView, 1000);       // passa para a espera quando a pausa ultrapassa 30 s
 setInterval(refreshStatus, 15000);
+scheduleRotate();
 </script>
 </body>
 </html>
