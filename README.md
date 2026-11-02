@@ -51,7 +51,8 @@ a partir do `~/.bash_profile` do usuário `lucas`. Para sair do quiosque pelo SS
 ## Banco de dados
 SQLite em `~/hub-musical/data/hub.db` no Dell (não é Supabase; é um arquivo local). Consultar pelo SSH:
 `sqlite3 -readonly ~/hub-musical/data/hub.db "select * from plays order by id desc limit 10"`.
-Ou copiar para o computador (`scp lucas@hub-automacoes.local:hub-musical/data/hub.db .`) e abrir no DB Browser for SQLite.
+Ou copiar para o computador (`scp hub:hub-musical/data/hub.db .`) e abrir no DB Browser for SQLite.
+O SSH só aceita chave: no Lenovo, `~/.ssh/config` define o apelido `hub` com a chave `~/.ssh/hub_ed25519`.
 
 ## Segredos
 Client ID, tokens, PIN e dados locais ficam fora do repositório (`.gitignore`).
