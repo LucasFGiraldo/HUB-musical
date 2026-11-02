@@ -43,10 +43,12 @@ class _Detector:
         self._it.resize_tensor_input(self._in, [RATE * WINDOW_SECONDS], strict=True)
         self._it.allocate_tensors()
 
-    def music_score(self, audio: np.ndarray) -> float:
+    def music_scores(self, audio: np.ndarray) -> tuple[float, float]:
+        """(média da janela, último ~1 s). O último quadro reage rápido a uma pausa entre faixas."""
         self._it.set_tensor(self._in, audio)
         self._it.invoke()
-        return float(self._it.get_tensor(self._out).mean(axis=0)[MUSIC_CLASS])
+        frames = self._it.get_tensor(self._out)[:, MUSIC_CLASS]
+        return float(frames.mean()), float(frames[-1])
 
 
 def _wav(pcm: bytes) -> bytes:
@@ -79,14 +81,28 @@ def _parse(t: dict) -> dict:
     }
 
 
-def _clear() -> None:
-    poller.set_listening(False)
+# Muda sempre que a faixa sai da tela: identificações que já estavam em andamento são descartadas
+_epoch = 0
+# Última faixa do microfone gravada no histórico (evita gravar de novo a mesma faixa reidentificada)
+_last_logged: str | None = None
+
+
+def _drop_track() -> None:
+    """Tira a faixa do microfone da tela (a música parou ou pode ter mudado)."""
+    global _epoch
+    _epoch += 1
     if poller.state["mic"] is not None:
         poller.state["mic"] = None
         poller.publish_now()
 
 
-async def _identify(shazam: Shazam, pcm: bytes) -> None:
+def _clear() -> None:
+    poller.set_listening(False)
+    _drop_track()
+
+
+async def _identify(shazam: Shazam, pcm: bytes, epoch: int) -> None:
+    global _last_logged
     try:
         out = await shazam.recognize(_wav(pcm))
     except Exception as exc:
@@ -94,6 +110,8 @@ async def _identify(shazam: Shazam, pcm: bytes) -> None:
         status["error"] = f"Shazam: {exc}"
         return
     status["last_identify_at"] = time.time()
+    if epoch != _epoch or poller.state["now"].get("playing"):
+        return  # a faixa mudou ou o Spotify começou a tocar enquanto o Shazam respondia
     t = out.get("track")
     if not t:
         status["last_result"] = "não reconhecida"
@@ -103,9 +121,11 @@ async def _identify(shazam: Shazam, pcm: bytes) -> None:
     if (poller.state["mic"] or {}).get("id") != track["id"]:
         poller.state["mic"] = track
         poller.set_listening(False)  # identificada: a tela passa a mostrar a faixa
-        await asyncio.to_thread(db.add_play, track)
         poller.publish_now()
-        poller.publish("history", {})
+        if track["id"] != _last_logged:
+            _last_logged = track["id"]
+            await asyncio.to_thread(db.add_play, track)
+            poller.publish("history", {})
 
 
 async def _listen(detector: _Detector, shazam: Shazam) -> None:
@@ -113,7 +133,7 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
         "arecord", "-q", "-D", DEVICE, "-f", "S16_LE", "-r", str(RATE), "-c", "1", "-t", "raw",
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     buf: deque[bytes] = deque(maxlen=BUFFER_SECONDS)
-    streak, last_music, last_try = 0, 0.0, 0.0
+    streak, gap, last_music, last_try = 0, 0, 0.0, float("-inf")
     identifying: asyncio.Task | None = None
     try:
         while settings.get().mic_enabled:
@@ -125,7 +145,7 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
             s, now = settings.get(), time.time()
 
             if poller.state["now"].get("playing"):
-                streak = 0
+                streak = gap = 0
                 status.update(state="spotify ativo", music_score=None)
                 _clear()
                 continue
@@ -134,8 +154,20 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
 
             window = b"".join(list(buf)[-WINDOW_SECONDS:])
             audio = np.frombuffer(window, np.int16).astype(np.float32) / 32768
-            score = await asyncio.to_thread(detector.music_score, audio)
+            score, latest = await asyncio.to_thread(detector.music_scores, audio)
             status["music_score"] = round(score, 3)
+
+            # Pausa e volta da música com uma faixa na tela: provavelmente começou outra.
+            # Tira a faixa (aparece "Ouvindo música...") e identifica de novo sem esperar o recheck.
+            if latest < s.music_threshold:
+                gap += 1
+            else:
+                if gap >= s.gap_seconds and poller.state["mic"] is not None:
+                    log.info("pausa de %s s entre músicas: identificando de novo", gap)
+                    _drop_track()
+                    streak, last_try = 0, float("-inf")
+                gap = 0
+
             if score >= s.music_threshold:
                 streak += 1
                 last_music = now
@@ -154,7 +186,9 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
             interval = s.recheck_seconds if poller.state["mic"] else RETRY_SECONDS
             if streak >= s.music_seconds and not busy and now - last_try >= interval:
                 last_try = now
-                identifying = asyncio.create_task(_identify(shazam, b"".join(list(buf)[-s.clip_seconds:])))
+                # Só o áudio desde que a música (re)começou, para não mandar o fim da faixa anterior
+                clip = b"".join(list(buf)[-min(s.clip_seconds, streak + 1):])
+                identifying = asyncio.create_task(_identify(shazam, clip, _epoch))
                 busy = True
             status["state"] = "identificando" if busy else "música detectada" if streak else "aguardando música"
     finally:

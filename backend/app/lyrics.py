@@ -40,10 +40,10 @@ def _get(path: str, params: dict):
         resp = _client.get(f"{LRCLIB}/{path}", params=params)
     except httpx.HTTPError as exc:
         raise Unavailable(str(exc))
-    if resp.status_code == 404:
-        return None
-    if resp.status_code != 200:
+    if resp.status_code == 429 or resp.status_code >= 500:
         raise Unavailable(f"HTTP {resp.status_code}")
+    if resp.status_code != 200:  # 404 (não tem) ou 400 (pedido sem algum dado): tratar como sem letra
+        return None
     data = resp.json()
     return None if isinstance(data, dict) and data.get("statusCode") else data
 

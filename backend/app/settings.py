@@ -19,6 +19,8 @@ class Settings(BaseModel):
     recheck_seconds: int = Field(30, ge=10, le=300)
     # Sem música por esse tempo, a faixa do microfone sai da tela
     silence_seconds: int = Field(15, ge=5, le=120)
+    # Pausa (em segundos) que, quando a música volta, indica uma nova faixa: mostra "Ouvindo música..." e identifica de novo
+    gap_seconds: int = Field(2, ge=1, le=10)
     # Letra sincronizada das músicas do Spotify
     lyrics_enabled: bool = True
     # Aparelhos do Spotify a ignorar (ex.: o carro): nome exato, sem diferenciar maiúsculas

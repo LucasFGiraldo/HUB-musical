@@ -72,7 +72,7 @@
     opacity: 0;
     transition: opacity 1400ms var(--ease);
   }
-  .halo.on { opacity: var(--halo-opacity); }
+  body.playing .halo.on { opacity: var(--halo-opacity); }  /* a luz da capa só acompanha a tela da música */
 
   #now {
     display: grid;
@@ -357,6 +357,7 @@ function setCover(url) {
     return;
   }
   const probe = new Image();
+  probe.onerror = () => { if (url === coverUrl) setCover(null); };  // capa não carregou: sem imagem velha
   probe.onload = () => {
     if (url !== coverUrl) return;
     $(`cover${next}`).src = url;
@@ -391,16 +392,17 @@ function swapInfo(d, animate) {
 
 function applyNow(d) {
   ready = true;
-  if (!d.title) { track = null; pausedSince = null; setLyrics(null); updateView(); return; }
+  if (!d.title) { track = null; pausedSince = null; lyricsFor = null; setLyrics(null); updateView(); return; }
   const changed = !track || track.id !== d.id;
-  if (d.playing) pausedSince = null; else if (pausedSince === null) pausedSince = Date.now();
+  // O servidor diz há quanto tempo está pausada (vale também ao recarregar a página)
+  pausedSince = d.playing ? null : Date.now() - (d.paused_ms || 0);
   track = d;
   fetchedAt = Date.now();
   $("sleeve").classList.toggle("paused", !d.playing);
   if (changed) {
     setCover(d.cover);
     swapInfo(d, $("now").classList.contains("on"));
-    if (d.source === "spotify") loadLyrics(d); else setLyrics(null);
+    if (d.source === "spotify") loadLyrics(d); else { lyricsFor = null; setLyrics(null); }
   }
   renderProgress();
   updateView();
@@ -483,6 +485,7 @@ function updateView() {
   const showNow = !!track && (track.playing || (pausedSince !== null && Date.now() - pausedSince <= IDLE_AFTER_PAUSE_MS));
   $("now").classList.toggle("on", showNow);
   $("idle").classList.toggle("on", !showNow);
+  document.body.classList.toggle("playing", showNow);
   const listen = !showNow && listening.active;
   $("listening").classList.toggle("on", listen);
   document.body.classList.toggle("listening", listen);
