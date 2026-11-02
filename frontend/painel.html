@@ -131,6 +131,19 @@
   .history .side svg { width: 16px; height: 16px; }
   .empty-note { color: var(--muted); padding: 12px 0; }
 
+  /* Livros: capa em pé; a barra ferrugem é o progresso de leitura (a mesma cor da tela) */
+  .reading { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; border-radius: 14px; overflow: hidden; }
+  .reading li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 16px; background: var(--raise); }
+  .reading li.empty-note { display: block; padding: 14px 16px; }
+  .reading img { width: 48px; height: 72px; border-radius: 3px 5px 5px 3px; object-fit: cover; background: var(--sunk); }
+  .reading .t { font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reading .a { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reading .prog { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .reading .prog .track { flex: 1; height: 6px; background: var(--sunk); border-radius: 99px; overflow: hidden; }
+  .reading .prog .track i { display: block; height: 100%; background: var(--rust); border-radius: 99px; }
+  .history.books img { height: 66px; border-radius: 3px 5px 5px 3px; }
+  .field .label { font-weight: 520; }
+
   /* ---------- Ajustes ---------- */
   .group { background: var(--raise); border-radius: 14px; padding: 4px 16px; }
   .field { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
@@ -227,6 +240,9 @@
       <svg class="glyph" id="np-src" style="display:none"><use href="#i-spotify"/></svg>
     </div>
 
+    <h2>Lendo agora</h2>
+    <ul class="reading" id="reading"><li class="empty-note">—</li></ul>
+
     <h2>Estado</h2>
     <div class="rows">
       <div class="row"><span class="dot" id="st-spotify"></span><span class="what">Spotify</span><span class="val" id="v-spotify">—</span></div>
@@ -269,6 +285,15 @@
 
     <h2>Histórico</h2>
     <ul class="history" id="history"></ul>
+
+    <h2>Leituras</h2>
+    <div class="figures">
+      <div class="figure"><div class="n" id="f-books-read">—</div><div class="l">livros terminados no período</div></div>
+      <div class="figure"><div class="n" id="f-books-pages">—</div><div class="l">páginas desses livros</div></div>
+      <div class="figure"><div class="n" id="f-books-want">—</div><div class="l">na fila para ler</div></div>
+    </div>
+    <h2>Últimos livros lidos</h2>
+    <ul class="history books" id="read-list"></ul>
   </section>
 
   <!-- ================= Ajustes ================= -->
@@ -327,14 +352,32 @@
           <span class="switch"><input type="checkbox" id="lyrics_enabled" name="lyrics_enabled"><span></span></span>
           <div class="help">Mostra a letra sincronizada das músicas do Spotify, quando existe.</div>
         </div>
+      </div>
+
+      <h2>Leituras</h2>
+      <div class="group">
         <div class="field">
           <label for="books_enabled">Leituras na tela de espera</label>
           <span class="switch"><input type="checkbox" id="books_enabled" name="books_enabled"><span></span></span>
-          <div class="help">Alterna as últimas músicas com o que você está lendo e os últimos livros lidos no Hardcover.</div>
+          <div class="help">Alterna as últimas músicas com os livros do Hardcover.</div>
         </div>
         <div class="field">
-          <label for="idle_rotate_seconds">Trocar de página a cada</label>
+          <label for="idle_rotate_seconds">Trocar entre músicas e leituras a cada</label>
           <span class="num"><input type="number" id="idle_rotate_seconds" name="idle_rotate_seconds" min="5" max="120" step="1" inputmode="numeric"><span>s</span></span>
+        </div>
+        <div class="field">
+          <label for="books_covers">Capas de livro na tela</label>
+          <span class="num"><input type="number" id="books_covers" name="books_covers" min="1" max="6" step="1" inputmode="numeric"></span>
+        </div>
+        <div class="field">
+          <label for="books_show_read">Mostrar os últimos lidos</label>
+          <span class="switch"><input type="checkbox" id="books_show_read" name="books_show_read"><span></span></span>
+          <div class="help">Depois dos livros que você está lendo, completa as capas com os últimos que terminou.</div>
+        </div>
+        <div class="field">
+          <span class="label">Hardcover</span>
+          <button type="button" class="btn" id="books-refresh">Atualizar agora</button>
+          <div class="help" id="books-sync">Os livros são atualizados sozinhos a cada 5 minutos.</div>
         </div>
       </div>
 
@@ -464,7 +507,7 @@ let days = 30;
 document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
   days = Number(b.dataset.days);
   document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
-  loadStats();
+  loadStats(); loadLibrary();
 }));
 
 const dayLabel = (iso) => { const [, m, d] = iso.split("-"); return `${d}/${m}`; };
@@ -538,6 +581,67 @@ async function loadStats() {
   }
 }
 
+/* ---------- Leituras (Hardcover) ---------- */
+const longDate = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+const stars = (r) => r === null || r === undefined ? "" : `★ ${String(r).replace(".", ",")}`;
+
+async function loadLibrary() {
+  let lib;
+  try { lib = await fetch(`/api/library?days=${days}`).then((r) => r.json()); } catch { return; }
+  const connected = lib.status !== "sem token";
+
+  // Agora: o que está sendo lido
+  const ul = $("reading"); ul.replaceChildren();
+  if (!lib.reading.length) {
+    ul.append(el("li", "empty-note", connected
+      ? "Nenhum livro em leitura. Marque um livro como “Lendo” no Hardcover."
+      : "Hardcover não conectado. Guarde o token no servidor (veja o README)."));
+  }
+  for (const b of lib.reading) {
+    const li = el("li");
+    const img = el("img"); img.alt = ""; if (b.cover) img.src = b.cover;
+    const txt = el("div"); txt.style.minWidth = "0";
+    txt.append(el("div", "t", b.title), el("div", "a", b.authors || "Autor desconhecido"));
+    const prog = el("div", "prog");
+    const track = el("div", "track"); const fill = el("i"); fill.style.width = `${Math.round((b.progress || 0) * 100)}%`; track.append(fill);
+    const label = b.pages_read && b.pages ? `p. ${b.pages_read} de ${b.pages} · ${Math.round(b.progress * 100)}%`
+      : b.pages ? `${b.pages} páginas · sem progresso marcado` : "sem progresso marcado";
+    prog.append(track, el("span", "", label));
+    txt.append(prog);
+    li.append(img, txt);
+    ul.append(li);
+  }
+
+  // Estatísticas: lidos no período
+  $("f-books-read").textContent = connected ? lib.period_read : "—";
+  $("f-books-pages").textContent = connected ? lib.period_pages.toLocaleString("pt-BR") : "—";
+  $("f-books-want").textContent = connected ? lib.want_count : "—";
+  const list = $("read-list"); list.replaceChildren();
+  if (!lib.recent_read.length) list.append(el("li", "empty-note", connected ? "Nenhum livro marcado como lido ainda." : "Hardcover não conectado."));
+  for (const b of lib.recent_read) {
+    const li = el("li");
+    const img = el("img"); img.alt = ""; if (b.cover) img.src = b.cover;
+    const main = el("div", "main"); main.append(el("div", "", b.title), el("div", "muted", b.authors));
+    const side = el("div", "side");
+    side.append(el("span", "", b.finished ? longDate(b.finished) : "sem data"));
+    if (b.rating !== null) side.append(el("span", "", stars(b.rating)));
+    li.append(img, main, side);
+    list.append(li);
+  }
+
+  $("books-sync").textContent = !connected ? "Falta guardar o token do Hardcover no servidor."
+    : lib.status !== "ok" ? `Problema: ${lib.status}`
+    : `Atualizado às ${new Date(lib.updated_at * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Os livros são atualizados sozinhos a cada 5 minutos.`;
+}
+
+$("books-refresh").addEventListener("click", async () => {
+  const res = await fetch("/api/books/refresh", { method: "POST" }).catch(() => null);
+  if (!res) { toast("Sem conexão com o servidor"); return; }
+  if (res.ok) { toast("Buscando seus livros no Hardcover..."); return; }
+  const err = await res.json().catch(() => ({}));
+  toast(typeof err.detail === "string" ? err.detail : "Não deu para atualizar agora");
+});
+
 // Dica sobre as barras (mouse e toque)
 (function tooltip() {
   const chart = $("chart"), tip = $("tip");
@@ -560,12 +664,13 @@ async function loadStats() {
 
 /* ---------- Ajustes ---------- */
 const form = $("form");
-const NUM = ["music_seconds", "clip_seconds", "gap_seconds", "recheck_seconds", "silence_seconds", "idle_rotate_seconds"];
+const NUM = ["music_seconds", "clip_seconds", "gap_seconds", "recheck_seconds", "silence_seconds", "idle_rotate_seconds", "books_covers"];
 
 function fillForm(s) {
   $("mic_enabled").checked = s.mic_enabled;
   $("lyrics_enabled").checked = s.lyrics_enabled;
   $("books_enabled").checked = s.books_enabled;
+  $("books_show_read").checked = s.books_show_read;
   $("music_threshold").value = s.music_threshold;
   for (const k of NUM) $(k).value = s[k];
   $("night_from").value = s.night_from;
@@ -582,6 +687,7 @@ function readForm() {
     mic_enabled: $("mic_enabled").checked,
     lyrics_enabled: $("lyrics_enabled").checked,
     books_enabled: $("books_enabled").checked,
+    books_show_read: $("books_show_read").checked,
     music_threshold: Number($("music_threshold").value),
     night_from: $("night_from").value,
     day_from: $("day_from").value,
@@ -710,6 +816,8 @@ async function init() {
   const es = new EventSource("/api/stream");
   es.addEventListener("now", (e) => renderNow(JSON.parse(e.data)));
   es.addEventListener("history", () => { if ($("stats").classList.contains("on")) loadStats(); loadDevices(); });
+  es.addEventListener("library", loadLibrary);
+  loadLibrary();
   es.addEventListener("settings", (e) => {
     const s = JSON.parse(e.data);
     const dirty = $("savebar").classList.contains("on");

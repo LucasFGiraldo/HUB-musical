@@ -181,6 +181,22 @@ def get_books():
     return books.snapshot()
 
 
+@app.get("/api/library")
+def get_library(days: int = 30):
+    """Resumo das leituras para o painel: lendo agora, contagens e lidos no período."""
+    return books.library(max(1, min(days, 365)))
+
+
+@app.post("/api/books/refresh")
+async def refresh_books():
+    # async: acorda a tarefa do Hardcover no laço principal
+    if not config.HARDCOVER_TOKEN:
+        raise HTTPException(409, "O Hardcover ainda não está conectado (falta o token).")
+    if wait := books.refresh_now():
+        raise HTTPException(429, f"Acabou de atualizar. Tente de novo em {wait} s.")
+    return {"ok": True}
+
+
 @app.get("/api/settings")
 def get_settings():
     return settings.get()
@@ -222,6 +238,7 @@ async def put_settings(request: Request, changes: dict = Body(...)):
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False))
     poller.publish("settings", saved.model_dump())  # a tela aplica na hora (ex.: horários do tema)
+    poller.publish("books", books.snapshot())        # quantidade de capas / mostrar lidos
     return saved
 
 

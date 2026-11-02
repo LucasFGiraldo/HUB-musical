@@ -31,6 +31,9 @@ class Settings(BaseModel):
     # Tela de espera: alterna entre as últimas músicas e as leituras do Hardcover
     books_enabled: bool = True
     idle_rotate_seconds: int = Field(10, ge=5, le=120)
+    # Quantas capas de livro na tela, e se os já lidos completam a fila depois dos "lendo"
+    books_covers: int = Field(5, ge=1, le=6)
+    books_show_read: bool = True
 
 
 _current: Settings | None = None
