@@ -97,20 +97,23 @@ def now_playing() -> dict:
     token = _access_token()
     if token is None:
         return {"authorized": False}
-    resp = _client.get(f"{API_URL}/me/player/currently-playing",
-                       headers={"Authorization": f"Bearer {token}"})
+    # /me/player (em vez de currently-playing) também informa em qual aparelho está tocando
+    resp = _client.get(f"{API_URL}/me/player", headers={"Authorization": f"Bearer {token}"})
     if resp.status_code == 204:
         return {"authorized": True, "playing": False}
     resp.raise_for_status()
     data = resp.json()
     item = data.get("item")
-    if not item:
+    if not item or item.get("type") != "track":  # nada, anúncio ou podcast
         return {"authorized": True, "playing": False}
     images = item["album"]["images"]
+    device = data.get("device") or {}
     return {
         "authorized": True,
         "playing": data.get("is_playing", False),
         "source": "spotify",
+        "device": device.get("name"),
+        "device_type": device.get("type"),
         "id": item.get("id"),
         "title": item["name"],
         "artists": [a["name"] for a in item["artists"]],

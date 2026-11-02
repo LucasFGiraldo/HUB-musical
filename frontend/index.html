@@ -1,352 +1,551 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="day">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HUB Musical</title>
 <style>
-  :root { --bg: #0b0b0d; --panel: #141418; --fg: #f2f2f2; --muted: #8a8a92; --bar: #2a2a30;
-    --accent: #1db954; --warn: #e5a50a; }
+  @font-face {
+    font-family: "Bricolage Grotesque";
+    src: url("fonts/BricolageGrotesque.ttf") format("truetype");
+    font-weight: 200 800;
+    font-stretch: 75% 100%;
+    font-display: swap;
+  }
+
+  /* Dia: pedra e argila. Noite: musgo e linho. Nenhum branco, nenhum amarelo. */
+  :root {
+    --ease: cubic-bezier(.22, .61, .36, 1);
+    --fade: 900ms;
+  }
+  :root[data-theme="day"] {
+    --bg: #cfc9b9;
+    --ink: #2b261f;
+    --muted: #5f5849;
+    --faint: rgba(43, 38, 31, .14);
+    --spotify: #178b40;
+    --rust: #a4532f;
+    --shadow: rgba(52, 42, 28, .34);
+    --veil: rgba(207, 201, 185, .72);
+    --halo-opacity: .30;
+  }
+  :root[data-theme="night"] {
+    --bg: #181a15;
+    --ink: #ddd6c4;
+    --muted: #8c8672;
+    --faint: rgba(221, 214, 196, .12);
+    --spotify: #1db954;
+    --rust: #c0663f;
+    --shadow: rgba(0, 0, 0, .55);
+    --veil: rgba(24, 26, 21, .7);
+    --halo-opacity: .20;
+  }
+
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
-  .hidden { display: none !important; }
+  html, body { margin: 0; height: 100%; overflow: hidden; cursor: none; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-optical-sizing: auto;
+    transition: background-color 2s var(--ease), color 2s var(--ease);
+  }
+  svg { display: block; }
 
-  /* Tocando agora */
-  #now { height: 100%; display: flex; align-items: center; justify-content: center; gap: 4vw; padding: 4vw; }
-  #cover { width: min(42vw, 70vh); aspect-ratio: 1; object-fit: cover; border-radius: 12px;
-    background: var(--bar); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-  #info { flex: 1; min-width: 0; max-width: 46vw; }
-  #title { font-size: clamp(24px, 4.5vw, 64px); font-weight: 700; margin: 0 0 .2em; line-height: 1.1; }
-  #artists { font-size: clamp(16px, 2.6vw, 34px); opacity: .85; margin: 0 0 .3em; }
-  #album { font-size: clamp(13px, 1.8vw, 22px); color: var(--muted); margin: 0 0 1.5em; }
-  .progress { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; }
-  #bar { height: 100%; width: 0; background: var(--accent); }
-  .times { display: flex; justify-content: space-between; color: var(--muted);
-    font-size: clamp(12px, 1.4vw, 18px); margin-top: .5em; font-variant-numeric: tabular-nums; }
-  #paused { color: var(--muted); font-size: clamp(12px, 1.4vw, 18px); margin-top: 1em; }
-  #source { display: inline-block; color: var(--muted); border: 1px solid var(--bar); border-radius: 999px;
-    padding: .2em .8em; font-size: clamp(11px, 1.2vw, 15px); margin: 0 0 1.2em; }
+  /* A que sai some primeiro; a que entra espera um instante, para as duas não se sobreporem */
+  .view {
+    position: absolute; inset: 0;
+    opacity: 0; visibility: hidden;
+    transition: opacity 500ms var(--ease), visibility 0s linear 500ms;
+  }
+  .view.on {
+    opacity: 1; visibility: visible;
+    transition: opacity var(--fade) var(--ease) 380ms, visibility 0s linear 0s;
+  }
 
-  button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--bar);
-    border-radius: 8px; padding: .4em 1em; cursor: pointer; }
-  dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--bar); border-radius: 12px;
-    padding: 1.5em; width: min(92vw, 440px); }
-  dialog::backdrop { background: rgba(0,0,0,.6); }
-  dialog h2 { margin: 0 0 1em; font-size: 18px; }
-  dialog label { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 1em;
-    margin-bottom: .8em; font-size: 14px; }
-  dialog label small { display: block; color: var(--muted); font-size: 12px; }
-  dialog input[type=number] { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--bar);
-    border-radius: 6px; padding: .3em .5em; width: 100%; }
-  dialog .actions { display: flex; justify-content: flex-end; gap: .6em; margin-top: 1.2em; }
-  #settings-msg { color: var(--warn); font-size: 13px; min-height: 1.2em; margin: .5em 0 0; }
+  /* ---------- Tocando agora ---------- */
 
-  /* Painel de espera */
-  #idle { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 2.5vh; padding: 3vh 3vw; }
-  #idle header { display: flex; align-items: flex-end; justify-content: space-between; gap: 2vw; }
-  #clock { font-size: clamp(40px, 8vw, 110px); font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; }
-  #date { color: var(--muted); font-size: clamp(14px, 1.8vw, 22px); margin-top: .3em; }
-  #date::first-letter { text-transform: uppercase; }
-  .chips { display: flex; gap: .6em; flex-wrap: wrap; justify-content: flex-end; }
-  .chip { background: var(--panel); border-radius: 999px; padding: .35em .9em; font-size: clamp(12px, 1.3vw, 16px);
-    color: var(--muted); display: flex; align-items: center; gap: .45em; }
-  .chip::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: var(--muted); }
-  .chip.ok::before { background: var(--accent); }
-  .chip.warn::before { background: var(--warn); }
-  .content { display: grid; grid-template-columns: 1.1fr 1fr; gap: 3vw; min-height: 0; }
-  #mosaic { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 8px;
-    align-content: start; min-height: 0; }
-  #mosaic img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--bar); }
-  .side { display: flex; flex-direction: column; gap: 2.5vh; min-height: 0; overflow: hidden; }
-  .side h2 { font-size: clamp(13px, 1.4vw, 17px); font-weight: 600; color: var(--muted);
-    text-transform: uppercase; letter-spacing: .08em; margin: 0 0 .8em; }
-  #recent, #top { list-style: none; margin: 0; padding: 0; }
-  #recent li { display: grid; grid-template-columns: 44px 1fr auto; gap: .8em; align-items: center; padding: .35em 0; }
-  #recent img { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; background: var(--bar); }
-  .t { font-size: clamp(13px, 1.4vw, 17px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .a { font-size: clamp(12px, 1.2vw, 15px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .when { font-size: clamp(11px, 1.1vw, 14px); color: var(--muted); white-space: nowrap; }
-  #top li { display: flex; justify-content: space-between; padding: .3em 0; font-size: clamp(13px, 1.4vw, 17px); }
-  #top li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .empty { color: var(--muted); font-size: clamp(13px, 1.4vw, 17px); grid-column: 1 / -1; margin: 0; }
-  #recent li.empty { display: block; }
-  #idle footer { color: var(--muted); font-size: clamp(11px, 1.1vw, 14px); display: flex; gap: 2em; flex-wrap: wrap;
-    border-top: 1px solid var(--bar); padding-top: 1.2vh; }
+  .halo {
+    position: absolute; inset: -12%;
+    background-size: cover; background-position: center;
+    filter: blur(70px) saturate(.55) sepia(.4);
+    opacity: 0;
+    transition: opacity 1400ms var(--ease);
+  }
+  .halo.on { opacity: var(--halo-opacity); }
+
+  #now {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 7vmin;
+    padding: 7vmin 8vmin;
+  }
+  #sleeve {
+    position: relative;
+    width: min(44vw, 76vh); aspect-ratio: 1;
+    border-radius: .6vmin;
+    box-shadow: 0 3vmin 8vmin -2vmin var(--shadow);
+    overflow: hidden;
+    background: var(--faint);
+  }
+  #sleeve img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; transition: opacity 1000ms var(--ease);
+  }
+  #sleeve img.on { opacity: 1; }
+  #sleeve::after {
+    content: ""; position: absolute; inset: 0; background: var(--veil);
+    opacity: 0; transition: opacity 600ms var(--ease);
+  }
+  #sleeve.paused::after { opacity: 1; }
+  #pause {
+    position: absolute; left: 50%; top: 50%; z-index: 1;
+    width: 11vmin; height: 11vmin; margin: -5.5vmin 0 0 -5.5vmin;
+    color: var(--ink); opacity: 0; transform: scale(.9);
+    transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+  }
+  #sleeve.paused #pause { opacity: .9; transform: none; }
+
+  #info {
+    min-width: 0; max-width: 56ch;
+    transition: opacity 280ms var(--ease), transform 280ms var(--ease);
+  }
+  #info.swap { opacity: 0; transform: translateY(1.2vmin); }
+  #title {
+    margin: 0; font-size: clamp(28px, 6.4vmin, 84px); font-weight: 650; font-stretch: 88%;
+    line-height: 1.02; letter-spacing: -.02em;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  #artists { margin: 1.6vmin 0 0; font-size: clamp(16px, 3.1vmin, 40px); font-weight: 420; line-height: 1.15; }
+  #album { margin: .8vmin 0 0; font-size: clamp(13px, 2vmin, 26px); font-weight: 380; color: var(--muted); }
+
+  /* Letra: só ocupa espaço quando existe */
+  #lyrics {
+    display: grid; grid-template-rows: 0fr; opacity: 0;
+    transition: grid-template-rows 800ms var(--ease), opacity 800ms var(--ease), margin 800ms var(--ease);
+    margin-top: 0;
+  }
+  #lyrics.has { grid-template-rows: 1fr; opacity: 1; margin-top: 3.6vmin; }
+  #lyrics .window {
+    --line: clamp(18px, 3.3vmin, 42px);
+    overflow: hidden; min-height: 0; height: calc(var(--line) * 5.6);
+    -webkit-mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+            mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+  }
+  #lyrics ol {
+    position: relative;  /* offsetTop das linhas é medido a partir daqui */
+    list-style: none; margin: 0; padding: 0;
+    transition: transform 700ms var(--ease);
+  }
+  #lyrics li {
+    font-size: var(--line); line-height: 1.22; font-weight: 450; padding: .14em 0;
+    opacity: .3; transition: opacity 500ms var(--ease);
+  }
+  #lyrics li.cur { opacity: 1; font-weight: 560; }
+  #lyrics li.gap::before { content: "\266A"; }
+
+  #foot { display: flex; align-items: center; gap: 2vmin; margin-top: 4vmin; }
+  #source { width: clamp(18px, 3vmin, 34px); height: clamp(18px, 3vmin, 34px); flex: none; }
+  #source.spotify { color: var(--spotify); }
+  #source.mic { color: var(--rust); }
+  #progress { flex: 1; min-width: 0; transition: opacity 400ms var(--ease); }
+  #progress.hidden { display: none; }
+  .track { height: .5vmin; min-height: 3px; background: var(--faint); border-radius: 99px; overflow: hidden; }
+  #bar { height: 100%; width: 0; background: var(--ink); border-radius: 99px; opacity: .85; }
+  .times {
+    display: flex; justify-content: space-between; margin-top: 1vmin;
+    font-size: clamp(11px, 1.6vmin, 20px); color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Espera ---------- */
+
+  #idle { display: grid; place-items: center; }
+  #idle .body { transition: opacity 900ms var(--ease), filter 900ms var(--ease); }
+  body.listening #idle .body, body.listening #clock { opacity: .35; filter: blur(.4vmin); }
+  #clock {
+    position: absolute; top: 5.5vmin; left: 0; right: 0; text-align: center;
+    font-size: clamp(22px, 5.2vmin, 64px); font-weight: 250; font-stretch: 80%; letter-spacing: .02em;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+    transition: opacity 900ms var(--ease), filter 900ms var(--ease);
+  }
+  #recent { display: flex; justify-content: center; gap: 2.8vmin; width: 100%; padding: 0 4vw; }
+  #recent figure { margin: 0; width: min(17vw, 27vh); min-width: 0; }
+  #recent img {
+    display: block; width: 100%; aspect-ratio: 1; object-fit: cover;
+    border-radius: .5vmin; box-shadow: 0 1.6vmin 4vmin -1.4vmin var(--shadow); background: var(--faint);
+  }
+  #recent figcaption {
+    margin-top: 1.4vmin; font-size: clamp(11px, 1.7vmin, 21px); font-weight: 420; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #recent figure.enter { animation: rise 1100ms var(--ease) both; animation-delay: calc(var(--i) * 110ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(2.4vmin); } to { opacity: 1; transform: none; } }
+
+  #empty { width: 13vmin; height: 13vmin; color: var(--muted); opacity: .45; }
+  #empty.hidden { display: none; }
+
+  #status {
+    position: absolute; bottom: 4.5vmin; left: 0; right: 0;
+    display: flex; justify-content: center; align-items: center; gap: 3vmin;
+    transition: opacity 900ms var(--ease);
+  }
+  #status .g { width: clamp(14px, 2.4vmin, 28px); height: clamp(14px, 2.4vmin, 28px); color: var(--muted); opacity: .4; transition: color .6s, opacity .6s; }
+  #status .g.ok { opacity: 1; }
+  #st-spotify.ok { color: var(--spotify); }
+  #st-server { width: clamp(7px, 1.1vmin, 13px); height: clamp(7px, 1.1vmin, 13px); border-radius: 50%; background: var(--muted); opacity: .4; transition: background .6s, opacity .6s; }
+  #st-server.ok { background: var(--spotify); opacity: .9; }
+  #st-server.bad { background: var(--rust); opacity: 1; }
+  #st-spotify.bad { color: var(--rust); opacity: 1; }
+
+  /* ---------- Ouvindo música... ---------- */
+
+  #listening {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 700ms var(--ease), visibility 0s linear 700ms;
+  }
+  #listening.on { opacity: 1; visibility: visible; transition-delay: 0s; }
+  #listening .panel {
+    display: grid; justify-items: center; gap: 3.4vmin; padding: 7vmin 9vmin; border-radius: 4vmin;
+    background: var(--veil); box-shadow: 0 4vmin 12vmin -3vmin var(--shadow);
+    -webkit-backdrop-filter: blur(2.4vmin); backdrop-filter: blur(2.4vmin);
+    transform: scale(.96); transition: transform 900ms var(--ease);
+  }
+  #listening.on .panel { transform: none; }
+  .bars { display: flex; align-items: center; gap: 1.2vmin; height: 12vmin; color: var(--rust); }
+  .bars i {
+    display: block; width: 1.1vmin; min-width: 5px; height: 100%; border-radius: 99px; background: currentColor;
+    transform: scaleY(.18); animation: wave 1.5s ease-in-out infinite;
+    animation-duration: calc(1.05s + var(--d) * .09s); animation-delay: calc(var(--d) * -.17s);
+  }
+  @keyframes wave { 0%, 100% { transform: scaleY(.18); } 50% { transform: scaleY(1); } }
+  #listening p { margin: 0; font-size: clamp(18px, 4vmin, 48px); font-weight: 400; font-stretch: 90%; letter-spacing: -.005em; }
+  #timer { font-size: clamp(16px, 3.2vmin, 40px); font-weight: 300; color: var(--muted); font-variant-numeric: tabular-nums; }
 
   @media (max-aspect-ratio: 1/1) {
-    #now { flex-direction: column; text-align: center; }
-    #cover { width: min(80vw, 50vh); }
+    #now { grid-template-columns: 1fr; grid-template-rows: auto auto; align-content: center; justify-items: center; text-align: center; gap: 5vmin; }
+    #sleeve { width: min(78vw, 42vh); }
     #info { max-width: 90vw; }
-    .content { grid-template-columns: 1fr; }
-    #mosaic { grid-template-columns: repeat(6, 1fr); }
+    #foot { flex-direction: column; }
+    #recent { flex-wrap: wrap; }
+    #recent figure { width: min(26vw, 18vh); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root { --fade: 200ms; }
+    .bars i { animation: none; transform: scaleY(.6); }
+    #recent figure.enter { animation: none; }
+    * { transition-duration: 200ms !important; }
   }
 </style>
 </head>
 <body>
-<section id="now" class="hidden">
-  <img id="cover" alt="">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-spotify" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="12" fill="currentColor"/>
+    <g fill="none" stroke="var(--bg)" stroke-width="1.9" stroke-linecap="round">
+      <path d="M5.4 8.7c4.6-1.4 9.5-.9 13.5 1.5"/>
+      <path d="M6.1 12.3c3.8-1.1 7.8-.7 11.2 1.2"/>
+      <path d="M6.9 15.7c3-.8 5.9-.5 8.4 1"/>
+    </g>
+  </symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24">
+    <rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor"/>
+    <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24">
+    <rect x="5" y="3.5" width="5" height="17" rx="1.6" fill="currentColor"/>
+    <rect x="14" y="3.5" width="5" height="17" rx="1.6" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-vinyl" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.1">
+      <circle cx="12" cy="12" r="10.5"/><circle cx="12" cy="12" r="7" opacity=".6"/><circle cx="12" cy="12" r="3.2"/>
+    </g>
+    <circle cx="12" cy="12" r=".9" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<div class="halo" id="halo0"></div>
+<div class="halo" id="halo1"></div>
+
+<section id="now" class="view" aria-live="polite">
+  <div id="sleeve">
+    <img id="cover0" alt=""><img id="cover1" alt="">
+    <svg id="pause"><use href="#i-pause"/></svg>
+  </div>
   <div id="info">
     <h1 id="title"></h1>
     <p id="artists"></p>
     <p id="album"></p>
-    <p id="source"></p>
-    <div id="progress-wrap">
-      <div class="progress"><div id="bar"></div></div>
-      <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
-    </div>
-    <p id="paused" class="hidden">Pausado</p>
-  </div>
-</section>
-
-<section id="idle">
-  <header>
-    <div>
-      <div id="clock">--:--</div>
-      <div id="date"></div>
-    </div>
-    <div class="chips">
-      <span id="chip-spotify" class="chip">Spotify</span>
-      <span id="chip-server" class="chip">Servidor</span>
-    </div>
-  </header>
-  <div class="content">
-    <div id="mosaic"></div>
-    <div class="side">
-      <div>
-        <h2>Tocadas recentemente</h2>
-        <ul id="recent"></ul>
-      </div>
-      <div>
-        <h2>Mais ouvidos · 30 dias</h2>
-        <ol id="top"></ol>
+    <div id="lyrics"><div class="window"><ol id="lines"></ol></div></div>
+    <div id="foot">
+      <svg id="source"><use href="#i-spotify"/></svg>
+      <div id="progress">
+        <div class="track"><div id="bar"></div></div>
+        <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
       </div>
     </div>
   </div>
-  <footer>
-    <span id="p-poll">Consulta ao Spotify: –</span>
-    <span id="p-mic">Microfone: –</span>
-    <span id="p-total">Músicas registradas: –</span>
-    <span id="p-uptime">Servidor no ar desde –</span>
-    <button id="open-settings" type="button">Parâmetros</button>
-  </footer>
 </section>
 
-<dialog id="settings">
-  <form id="settings-form" method="dialog">
-    <h2>Parâmetros do microfone</h2>
-    <label>Microfone ligado <input type="checkbox" name="mic_enabled"></label>
-    <label><span>Confiança mínima de música<small>0,05 a 0,95 — maior ignora mais barulho</small></span>
-      <input type="number" name="music_threshold" min="0.05" max="0.95" step="0.05"></label>
-    <label><span>Segundos de música antes de identificar<small>1 a 30</small></span>
-      <input type="number" name="music_seconds" min="1" max="30" step="1"></label>
-    <label><span>Segundos de áudio enviados ao Shazam<small>3 a 15</small></span>
-      <input type="number" name="clip_seconds" min="3" max="15" step="1"></label>
-    <label><span>Conferir troca de faixa a cada (s)<small>10 a 300</small></span>
-      <input type="number" name="recheck_seconds" min="10" max="300" step="5"></label>
-    <label><span>Tirar da tela após silêncio de (s)<small>5 a 120</small></span>
-      <input type="number" name="silence_seconds" min="5" max="120" step="5"></label>
-    <p id="settings-msg"></p>
-    <div class="actions">
-      <button type="button" id="close-settings">Cancelar</button>
-      <button type="submit" id="save-settings">Salvar</button>
+<section id="idle" class="view">
+  <div id="clock">--:--</div>
+  <div class="body">
+    <div id="recent"></div>
+    <svg id="empty" class="hidden"><use href="#i-vinyl"/></svg>
+  </div>
+  <div id="status">
+    <svg id="st-spotify" class="g"><use href="#i-spotify"/></svg>
+    <span id="st-server"></span>
+  </div>
+</section>
+
+<div id="listening" aria-live="polite">
+  <div class="panel">
+    <div class="bars" aria-hidden="true">
+      <i style="--d:3"></i><i style="--d:6"></i><i style="--d:1"></i><i style="--d:8"></i><i style="--d:4"></i>
+      <i style="--d:9"></i><i style="--d:2"></i><i style="--d:7"></i><i style="--d:5"></i>
     </div>
-  </form>
-</dialog>
+    <p>Ouvindo música...</p>
+    <span id="timer">0:00</span>
+  </div>
+</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const IDLE_AFTER_PAUSE_MS = 30000;  // pausado por mais que isso → painel de espera
+const IDLE_AFTER_PAUSE_MS = 30000;   // pausado por mais que isso → tela de espera
+const NIGHT_FROM = 19 * 60 + 30;     // 19:30 → noite
+const DAY_FROM = 8 * 60;             // 08:00 → dia
 
-let track = null;       // último estado vindo do servidor
-let fetchedAt = 0;      // quando chegou, para avançar a barra localmente
+let track = null;                    // último estado vindo do servidor
+let fetchedAt = 0;                   // quando chegou, para avançar a barra localmente
 let pausedSince = null;
+let listening = { active: false };
+let listenBase = 0;
+let lyricsLines = null, lyricsFor = null, lyricsTimer = null, curLine = -2;
 
-function fmt(ms) {
+const fmt = (ms) => {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+/* ---------- Dia e noite ---------- */
+
+function applyTheme() {
+  const forced = new URLSearchParams(location.search).get("theme");
+  const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+  const night = forced ? forced === "night" : (m >= NIGHT_FROM || m < DAY_FROM);
+  document.documentElement.dataset.theme = night ? "night" : "day";
 }
 
-function ago(iso) {
-  const min = Math.round((Date.now() - new Date(iso)) / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${min} min`;
-  if (min < 24 * 60) return `há ${Math.round(min / 60)} h`;
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+function tickClock() {
+  $("clock").textContent = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
+/* ---------- Capa (troca com cruzamento suave) ---------- */
 
-function show(view) {
-  $("now").classList.toggle("hidden", view !== "now");
-  $("idle").classList.toggle("hidden", view !== "idle");
+let coverUrl = null, coverSlot = 0;
+
+function setCover(url) {
+  if (url === coverUrl) return;
+  coverUrl = url;
+  const next = 1 - coverSlot;
+  if (!url) {
+    $(`cover${coverSlot}`).classList.remove("on"); $(`halo${coverSlot}`).classList.remove("on");
+    return;
+  }
+  const probe = new Image();
+  probe.onload = () => {
+    if (url !== coverUrl) return;
+    $(`cover${next}`).src = url;
+    $(`halo${next}`).style.backgroundImage = `url("${url}")`;
+    for (const id of [`cover${next}`, `halo${next}`]) $(id).classList.add("on");
+    for (const id of [`cover${coverSlot}`, `halo${coverSlot}`]) $(id).classList.remove("on");
+    coverSlot = next;
+  };
+  probe.src = url;
 }
 
 /* ---------- Tocando agora ---------- */
 
-function renderProgress() {
-  if (!track || !track.title || !track.duration_ms) return;
-  const progress = track.playing
-    ? Math.min(track.duration_ms, track.progress_ms + (Date.now() - fetchedAt))
-    : track.progress_ms;
-  $("bar").style.width = `${(progress / track.duration_ms) * 100}%`;
-  $("elapsed").textContent = fmt(progress);
+function fillInfo(d) {
+  $("title").textContent = d.title;
+  $("artists").textContent = d.artists.join(", ");
+  $("album").textContent = [d.album, d.release_date && d.release_date.slice(0, 4)].filter(Boolean).join(" · ");
+  const mic = d.source === "mic";
+  $("source").setAttribute("class", mic ? "mic" : "spotify");
+  $("source").firstElementChild.setAttribute("href", mic ? "#i-mic" : "#i-spotify");
+  $("progress").classList.toggle("hidden", !d.duration_ms);
+  $("duration").textContent = d.duration_ms ? fmt(d.duration_ms) : "";
 }
 
-function applyNow(data) {
-  if (!data.title) { track = null; pausedSince = null; show("idle"); return; }
+let swapTimer = null;
+function swapInfo(d, animate) {
+  clearTimeout(swapTimer);
+  if (!animate) { fillInfo(d); return; }
+  $("info").classList.add("swap");
+  swapTimer = setTimeout(() => { fillInfo(d); $("info").classList.remove("swap"); }, 300);
+}
 
-  if (data.playing) pausedSince = null;
-  else if (pausedSince === null) pausedSince = Date.now();
-
-  if (!track || track.cover !== data.cover) $("cover").src = data.cover || "";
-  $("title").textContent = data.title;
-  $("artists").textContent = data.artists.join(", ");
-  $("album").textContent = [data.album, data.release_date && data.release_date.slice(0, 4)]
-    .filter(Boolean).join(" · ");
-  $("source").textContent = data.source === "mic" ? "Ouvido pelo microfone" : "Spotify";
-  // O Shazam não informa duração nem progresso
-  $("progress-wrap").classList.toggle("hidden", !data.duration_ms);
-  $("duration").textContent = fmt(data.duration_ms);
-  $("paused").classList.toggle("hidden", data.playing);
-  track = data;
+function applyNow(d) {
+  ready = true;
+  if (!d.title) { track = null; pausedSince = null; setLyrics(null); updateView(); return; }
+  const changed = !track || track.id !== d.id;
+  if (d.playing) pausedSince = null; else if (pausedSince === null) pausedSince = Date.now();
+  track = d;
   fetchedAt = Date.now();
+  $("sleeve").classList.toggle("paused", !d.playing);
+  if (changed) {
+    setCover(d.cover);
+    swapInfo(d, $("now").classList.contains("on"));
+    if (d.source === "spotify") loadLyrics(d); else setLyrics(null);
+  }
   renderProgress();
-
   updateView();
 }
 
-function updateView() {
-  if (!track) { show("idle"); return; }
-  const idle = pausedSince !== null && Date.now() - pausedSince > IDLE_AFTER_PAUSE_MS;
-  show(idle ? "idle" : "now");
+function renderProgress() {
+  if (!track || !track.duration_ms) return;
+  const p = track.playing
+    ? Math.min(track.duration_ms, track.progress_ms + (Date.now() - fetchedAt))
+    : track.progress_ms;
+  $("bar").style.width = `${(p / track.duration_ms) * 100}%`;
+  $("elapsed").textContent = fmt(p);
+  syncLyrics(p);
 }
 
-// Eventos em tempo real do servidor; o navegador reconecta sozinho se cair
+/* ---------- Letra sincronizada (só Spotify) ---------- */
+
+function setLyrics(lines) {
+  clearTimeout(lyricsTimer);
+  lyricsLines = lines && lines.length ? lines : null;
+  curLine = -2;
+  const ol = $("lines");
+  if (!lyricsLines) {
+    $("lyrics").classList.remove("has");
+    setTimeout(() => { if (!lyricsLines) ol.replaceChildren(); }, 900);
+    return;
+  }
+  ol.replaceChildren(...lyricsLines.map((l) => {
+    const li = document.createElement("li");
+    li.textContent = l.text;
+    if (!l.text) li.className = "gap";
+    return li;
+  }));
+  $("lyrics").classList.add("has");
+  if (track) syncLyrics(Math.min(track.duration_ms, track.progress_ms + (Date.now() - fetchedAt)));
+}
+
+function loadLyrics(d, attempt = 0) {
+  lyricsFor = d.id;
+  setLyrics(null);
+  fetch(`/api/lyrics?track=${encodeURIComponent(d.id)}`)
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((j) => { if (lyricsFor === d.id) setLyrics(j.lines); })
+    .catch(() => {
+      if (lyricsFor === d.id && attempt < 3) lyricsTimer = setTimeout(() => loadLyrics(d, attempt + 1), 20000);
+    });
+}
+
+function syncLyrics(progressMs) {
+  if (!lyricsLines) return;
+  const t = progressMs + 250;  // acende um instante antes
+  let lo = 0, hi = lyricsLines.length - 1, idx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (lyricsLines[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  if (idx === curLine) return;
+  curLine = idx;
+  const items = $("lines").children;
+  for (let i = 0; i < items.length; i++) items[i].classList.toggle("cur", i === idx);
+  centerLyrics();
+}
+
+function centerLyrics() {
+  const items = $("lines").children;
+  const el = items[Math.max(0, curLine)];
+  if (!el) return;
+  const win = $("lines").parentElement.clientHeight;
+  $("lines").style.transform = `translateY(${win / 2 - (el.offsetTop + el.offsetHeight / 2)}px)`;
+}
+addEventListener("resize", centerLyrics);
+
+/* ---------- Visões ---------- */
+
+let ready = false;   // só mostra uma visão depois do primeiro estado do servidor (evita piscar a espera)
+setTimeout(() => { ready = true; updateView(); }, 2500);
+
+function updateView() {
+  if (!ready) return;
+  const showNow = !!track && (track.playing || (pausedSince !== null && Date.now() - pausedSince <= IDLE_AFTER_PAUSE_MS));
+  $("now").classList.toggle("on", showNow);
+  $("idle").classList.toggle("on", !showNow);
+  const listen = !showNow && listening.active;
+  $("listening").classList.toggle("on", listen);
+  document.body.classList.toggle("listening", listen);
+}
+
+function renderTimer() {
+  if (listening.active) $("timer").textContent = fmt(performance.now() - listenBase);
+}
+
+/* ---------- Espera: as 5 últimas músicas ---------- */
+
+let recentKey = "";
+async function refreshRecent() {
+  let items;
+  try { items = await fetch("/api/recent?limit=5").then((r) => r.json()); } catch { return; }
+  const key = items.map((i) => i.cover).join("|");
+  $("empty").classList.toggle("hidden", items.length > 0);
+  if (key === recentKey) return;
+  recentKey = key;
+  $("recent").replaceChildren(...items.map((it, i) => {
+    const fig = document.createElement("figure");
+    fig.className = "enter"; fig.style.setProperty("--i", i);
+    const img = document.createElement("img"); img.src = it.cover; img.alt = "";
+    const cap = document.createElement("figcaption"); cap.textContent = it.title;
+    fig.append(img, cap);
+    return fig;
+  }));
+}
+
+async function refreshStatus() {
+  try {
+    const s = await fetch("/api/status").then((r) => r.json());
+    const ok = s.spotify_authorized && !s.last_error;
+    $("st-spotify").setAttribute("class", `g ${ok ? "ok" : "bad"}`);
+  } catch {
+    $("st-spotify").setAttribute("class", "g");
+  }
+}
+
+/* ---------- Tempo real ---------- */
+
 function connect() {
   const es = new EventSource("/api/stream");
-  es.addEventListener("open", () => setChip("chip-server", "ok", "Servidor"));
+  es.addEventListener("open", () => { $("st-server").className = "ok"; refreshStatus(); refreshRecent(); });
   es.addEventListener("now", (e) => applyNow(JSON.parse(e.data)));
-  es.addEventListener("history", () => refreshPanel());
-  es.addEventListener("error", () => setChip("chip-server", "warn", "Reconectando…"));
-}
-
-/* ---------- Painel de espera ---------- */
-
-function setChip(id, cls, text) {
-  const c = $(id);
-  c.className = `chip ${cls}`;
-  c.textContent = text;
-}
-
-function tickClock() {
-  const d = new Date();
-  $("clock").textContent = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  $("date").textContent = d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
-}
-
-async function refreshPanel() {
-  try {
-    const [history, stats, status] = await Promise.all([
-      fetch("/api/history?limit=60").then((r) => r.json()),
-      fetch("/api/stats").then((r) => r.json()),
-      fetch("/api/status").then((r) => r.json()),
-    ]);
-
-    // Mosaico: capas distintas mais recentes
-    const mosaic = $("mosaic");
-    mosaic.replaceChildren();
-    const covers = [...new Set(history.map((h) => h.cover).filter(Boolean))].slice(0, 16);
-    for (const src of covers) { const img = el("img"); img.src = src; img.alt = ""; mosaic.append(img); }
-    if (!covers.length) mosaic.append(el("p", "empty", "As capas aparecem aqui conforme você ouve músicas."));
-
-    // Lista das últimas músicas
-    const recent = $("recent");
-    recent.replaceChildren();
-    for (const h of history.slice(0, 7)) {
-      const li = el("li");
-      const img = el("img"); img.src = h.cover || ""; img.alt = "";
-      const text = el("div");
-      text.style.minWidth = "0";
-      text.append(el("div", "t", h.title),
-        el("div", "a", h.source === "mic" ? `${h.artists} · microfone` : h.artists));
-      li.append(img, text, el("span", "when", ago(h.played_at)));
-      recent.append(li);
-    }
-    if (!history.length) recent.append(el("li", "empty", "Nenhuma música registrada ainda."));
-
-    // Mais ouvidos
-    const top = $("top");
-    top.replaceChildren();
-    for (const t of stats.top_artists) {
-      const li = el("li");
-      li.append(el("span", "", t.artists), el("span", "", `${t.plays}×`));
-      top.append(li);
-    }
-    if (!stats.top_artists.length) top.append(el("li", "empty", "Sem dados ainda."));
-
-    // Estado e parâmetros
-    if (!status.spotify_authorized) setChip("chip-spotify", "warn", "Spotify não conectado");
-    else if (status.last_error) setChip("chip-spotify", "warn", `Spotify: ${status.last_error}`);
-    else setChip("chip-spotify", "ok", "Spotify");
-    $("p-poll").textContent = `Consulta ao Spotify: a cada ${status.poll_seconds} s`;
-    const mic = status.mic;
-    $("p-mic").textContent = `Microfone: ${mic.error ? `erro (${mic.error})` : mic.state}` +
-      (mic.music_score !== null ? ` · música ${Math.round(mic.music_score * 100)}%` : "") +
-      (mic.last_result ? ` · último: ${mic.last_result}` : "");
-    $("p-total").textContent = `Músicas registradas: ${stats.total_plays}`;
-    $("p-uptime").textContent = `Servidor no ar desde ${new Date(status.started_at * 1000)
-      .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
-  } catch {
-    setChip("chip-server", "warn", "Servidor indisponível");
-  }
-}
-
-/* ---------- Parâmetros ---------- */
-
-const form = $("settings-form");
-
-$("open-settings").addEventListener("click", async () => {
-  const s = await fetch("/api/settings").then((r) => r.json());
-  for (const [k, v] of Object.entries(s)) {
-    const input = form.elements[k];
-    if (!input) continue;
-    if (input.type === "checkbox") input.checked = v; else input.value = v;
-  }
-  $("settings-msg").textContent = "";
-  $("settings").showModal();
-});
-
-$("close-settings").addEventListener("click", () => $("settings").close());
-
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const body = {};
-  for (const input of form.querySelectorAll("input")) {
-    body[input.name] = input.type === "checkbox" ? input.checked : Number(input.value);
-  }
-  const res = await fetch("/api/settings", {
-    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  es.addEventListener("listening", (e) => {
+    listening = JSON.parse(e.data);
+    listenBase = performance.now() - (listening.elapsed_ms || 0);
+    renderTimer();
+    updateView();
   });
-  if (res.ok) { $("settings").close(); refreshPanel(); return; }
-  const err = await res.json().catch(() => ({}));
-  $("settings-msg").textContent = Array.isArray(err.detail)
-    ? `Valor inválido em: ${err.detail.map((d) => d.loc.at(-1)).join(", ")}`
-    : "Não foi possível salvar";
-});
+  es.addEventListener("history", refreshRecent);
+  es.addEventListener("error", () => { $("st-server").className = "bad"; });
+}
 
-tickClock();
+applyTheme(); tickClock();
 connect();
-refreshPanel();
+setInterval(applyTheme, 20000);
 setInterval(tickClock, 1000);
 setInterval(renderProgress, 250);
-setInterval(updateView, 1000);      // troca para o painel quando a pausa passa de 30 s
-setInterval(refreshPanel, 10000);   // atualiza "há X min" e o status do microfone
+setInterval(renderTimer, 250);
+setInterval(updateView, 1000);       // passa para a espera quando a pausa ultrapassa 30 s
+setInterval(refreshStatus, 15000);
 </script>
 </body>
 </html>

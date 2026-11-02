@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import config, db, listener, poller, settings, spotify
+from . import config, db, listener, lyrics, poller, settings, spotify
 
 
 @asynccontextmanager
@@ -58,6 +58,7 @@ async def stream():
         q = poller.subscribe()
         try:
             yield f"event: now\ndata: {json.dumps(poller.current())}\n\n"
+            yield f"event: listening\ndata: {json.dumps(poller.listening())}\n\n"
             while True:
                 try:
                     event, data = await asyncio.wait_for(q.get(), timeout=15)
@@ -76,6 +77,24 @@ def history(limit: int = 50):
     return db.recent(min(limit, 500))
 
 
+@app.get("/api/recent")
+def recent(limit: int = 5):
+    """Últimas músicas sem repetição, para a tela de espera."""
+    return db.recent_unique(min(limit, 20))
+
+
+@app.get("/api/lyrics")
+def get_lyrics(track: str):
+    """Letra sincronizada da música do Spotify que está tocando (`track` = id do Spotify)."""
+    now = poller.state["now"]
+    if not settings.get().lyrics_enabled or now.get("id") != track or not now.get("title"):
+        return {"lines": None}
+    try:
+        return {"lines": lyrics.for_track(now)}
+    except lyrics.Unavailable as exc:
+        raise HTTPException(503, f"Letras indisponíveis agora: {exc}")
+
+
 @app.get("/api/stats")
 def stats(days: int = 30):
     return db.stats(days)
@@ -91,6 +110,7 @@ def status():
         "started_at": s["started_at"],
         "poll_seconds": poller.POLL_SECONDS,
         "mic": listener.status,
+        "spotify_device": s["device"],
     }
 
 

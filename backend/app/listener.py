@@ -20,6 +20,7 @@ CHUNK_BYTES = RATE * 2          # 1 s de áudio mono int16
 BUFFER_SECONDS = 15
 WINDOW_SECONDS = 2              # áudio analisado pelo YAMNet a cada segundo
 RETRY_SECONDS = 10              # sem faixa identificada, intervalo entre tentativas
+LISTEN_GRACE_SECONDS = 3        # tolerância de silêncio antes de esconder "Ouvindo música..."
 MUSIC_CLASS = 132               # índice da classe "Music" (models/yamnet_class_map.csv)
 MODEL_FILE = config.ROOT / "backend" / "models" / "yamnet.tflite"
 DEVICE = os.environ.get("HUB_MIC_DEVICE", "plughw:1,0")
@@ -79,6 +80,7 @@ def _parse(t: dict) -> dict:
 
 
 def _clear() -> None:
+    poller.set_listening(False)
     if poller.state["mic"] is not None:
         poller.state["mic"] = None
         poller.publish_now()
@@ -100,6 +102,7 @@ async def _identify(shazam: Shazam, pcm: bytes) -> None:
     status.update(last_result=f"{track['title']} — {track['artists'][0]}", error=None)
     if (poller.state["mic"] or {}).get("id") != track["id"]:
         poller.state["mic"] = track
+        poller.set_listening(False)  # identificada: a tela passa a mostrar a faixa
         await asyncio.to_thread(db.add_play, track)
         poller.publish_now()
         poller.publish("history", {})
@@ -140,6 +143,12 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
                 streak = 0
             if now - last_music > s.silence_seconds:
                 _clear()
+            # "Ouvindo música...": a partir de 2 s de música seguidos, sem faixa na tela; some após 3 s sem música
+            if poller.state["mic"] is None:
+                if streak >= 2:
+                    poller.set_listening(True)
+                elif now - last_music > LISTEN_GRACE_SECONDS:
+                    poller.set_listening(False)
 
             busy = identifying is not None and not identifying.done()
             interval = s.recheck_seconds if poller.state["mic"] else RETRY_SECONDS

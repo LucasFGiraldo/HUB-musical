@@ -1,4 +1,4 @@
-"""Parâmetros ajustáveis pela tela, guardados em data/settings.json."""
+"""Parâmetros ajustáveis (API em /api/settings), guardados em data/settings.json."""
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,10 @@ class Settings(BaseModel):
     recheck_seconds: int = Field(30, ge=10, le=300)
     # Sem música por esse tempo, a faixa do microfone sai da tela
     silence_seconds: int = Field(15, ge=5, le=120)
+    # Letra sincronizada das músicas do Spotify
+    lyrics_enabled: bool = True
+    # Aparelhos do Spotify a ignorar (ex.: o carro): nome exato, sem diferenciar maiúsculas
+    ignored_devices: list[str] = []
 
 
 _current: Settings | None = None

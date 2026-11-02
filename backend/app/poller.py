@@ -7,7 +7,7 @@ import time
 
 import httpx
 
-from . import db, spotify
+from . import db, settings, spotify
 
 POLL_SECONDS = 1
 SEEK_TOLERANCE_MS = 2000  # diferença de progresso que indica um pulo na música
@@ -16,6 +16,8 @@ log = logging.getLogger("hub.poller")
 state = {
     "now": {"authorized": False},   # Spotify
     "mic": None,                    # faixa identificada pelo microfone (listener)
+    "listening_since": None,        # início da escuta de música ainda não identificada (listener)
+    "device": None,                 # último aparelho do Spotify visto (mesmo se ignorado)
     "fetched_at": 0.0,
     "last_ok": None,
     "last_error": None,
@@ -58,6 +60,22 @@ def publish_now() -> None:
     publish("now", current())
 
 
+def listening() -> dict:
+    """Escuta de música pelo microfone ainda sem faixa identificada (a tela mostra "Ouvindo música...")."""
+    since = state["listening_since"]
+    return {"active": since is not None, "elapsed_ms": int((time.time() - since) * 1000) if since else 0}
+
+
+def set_listening(active: bool) -> None:
+    if active and state["listening_since"] is None:
+        state["listening_since"] = time.time()
+    elif not active and state["listening_since"] is not None:
+        state["listening_since"] = None
+    else:
+        return
+    publish("listening", listening())
+
+
 def _changed(old: dict, new: dict, elapsed_ms: int) -> bool:
     keys = ("authorized", "id", "playing")
     if any(old.get(k) != new.get(k) for k in keys):
@@ -74,6 +92,10 @@ async def run() -> None:
         delay = POLL_SECONDS
         try:
             now = await asyncio.to_thread(spotify.now_playing)
+            state["device"] = now.get("device") or state["device"]
+            ignored = {d.casefold() for d in settings.get().ignored_devices}
+            if now.get("device") and now["device"].casefold() in ignored:
+                now = {"authorized": True, "playing": False}  # tocando num aparelho ignorado (ex.: carro)
             t = time.time()
             old, old_t = state["now"], state["fetched_at"]
             state.update(now=now, fetched_at=t, last_ok=t, last_error=None)
