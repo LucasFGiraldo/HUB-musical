@@ -64,6 +64,8 @@ async def security(request: Request, call_next):
         return PlainTextResponse("Endereço não permitido", status_code=400)
     response = await call_next(request)
     response.headers.update(SECURITY_HEADERS)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"  # páginas sempre conferem se há versão nova
     return response
 
 
@@ -267,14 +269,24 @@ async def add_book(request: Request, payload: dict = Body(...)):
         book_id = await asyncio.to_thread(shelf.create, data)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
-    if cover:
-        try:
-            img = await asyncio.to_thread(catalog.download_image, cover)
-            shelf.set_cover(book_id, await asyncio.to_thread(catalog.save_cover, book_id, img))
-        except (ValueError, httpx.HTTPError):
-            pass  # sem capa: dá para pôr depois pela ficha
+    if cover:  # a capa do Open Library pode demorar: baixa em segundo plano e avisa a tela quando chegar
+        task = asyncio.create_task(_catalog_cover(book_id, cover))
+        _background.add(task)
+        task.add_done_callback(_background.discard)
     _shelf_changed()
     return shelf.get(book_id)
+
+
+_background: set[asyncio.Task] = set()
+
+
+async def _catalog_cover(book_id: int, url: str) -> None:
+    try:
+        img = await asyncio.to_thread(catalog.download_image, url)
+        shelf.set_cover(book_id, await asyncio.to_thread(catalog.save_cover, book_id, img))
+        _shelf_changed()
+    except (ValueError, httpx.HTTPError):
+        pass  # sem capa: dá para pôr depois pela ficha
 
 
 @app.patch("/api/shelf/{book_id}")

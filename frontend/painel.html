@@ -1101,7 +1101,7 @@ $("book-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const data = readBookForm();
   if (!data.title) { $("bk-msg").textContent = "O livro precisa de um título."; $("bk-title").focus(); return; }
-  $("bk-save").disabled = true;
+  $("bk-save").disabled = true; $("bk-save").textContent = "Salvando...";
   try {
     if (current) {
       await api("PATCH", `/api/shelf/${current.id}`, data);
@@ -1114,7 +1114,7 @@ $("book-form").addEventListener("submit", async (e) => {
     $("book-dlg").close();
     toast(current ? "Livro salvo" : "Livro adicionado à estante");
   } catch (err) { $("bk-msg").textContent = err.message; }
-  finally { $("bk-save").disabled = false; }
+  finally { $("bk-save").disabled = false; $("bk-save").textContent = "Salvar"; }
 });
 
 $("bk-delete").addEventListener("click", async () => {
