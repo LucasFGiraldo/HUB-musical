@@ -171,7 +171,8 @@ def status():
         "last_ok": s["last_ok"],
         "last_error": s["last_error"],
         "started_at": s["started_at"],
-        "poll_seconds": poller.POLL_SECONDS,
+        "poll_seconds": s["poll_seconds"],
+        "spotify_blocked_until": s["blocked_until"],
         "mic": listener.status,
         "spotify_device": s["device"],
     }
