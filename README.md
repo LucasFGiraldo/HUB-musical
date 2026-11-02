@@ -1,4 +1,4 @@
-# HUB Musical
+# HUB Musical + Literário
 
 Tela que mostra a música que está tocando (capa, título, artista, duração), integrando Spotify e, depois, reconhecimento de áudio ambiente (vinil).
 
