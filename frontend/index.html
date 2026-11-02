@@ -156,18 +156,7 @@ function renderProgress() {
   $("elapsed").textContent = fmt(progress);
 }
 
-async function pollNow() {
-  let data;
-  try {
-    const res = await fetch("/api/now-playing");
-    data = await res.json();
-  } catch {
-    setChip("chip-server", "warn", "Servidor indisponível");
-    show("idle");
-    return;
-  }
-  setChip("chip-server", "ok", "Servidor");
-
+function applyNow(data) {
   if (!data.title) { track = null; pausedSince = null; show("idle"); return; }
 
   if (data.playing) pausedSince = null;
@@ -183,8 +172,22 @@ async function pollNow() {
   fetchedAt = Date.now();
   renderProgress();
 
+  updateView();
+}
+
+function updateView() {
+  if (!track) { show("idle"); return; }
   const idle = pausedSince !== null && Date.now() - pausedSince > IDLE_AFTER_PAUSE_MS;
   show(idle ? "idle" : "now");
+}
+
+// Eventos em tempo real do servidor; o navegador reconecta sozinho se cair
+function connect() {
+  const es = new EventSource("/api/stream");
+  es.addEventListener("open", () => setChip("chip-server", "ok", "Servidor"));
+  es.addEventListener("now", (e) => applyNow(JSON.parse(e.data)));
+  es.addEventListener("history", () => refreshPanel());
+  es.addEventListener("error", () => setChip("chip-server", "warn", "Reconectando…"));
 }
 
 /* ---------- Painel de espera ---------- */
@@ -254,12 +257,12 @@ async function refreshPanel() {
 }
 
 tickClock();
-pollNow();
+connect();
 refreshPanel();
 setInterval(tickClock, 1000);
-setInterval(pollNow, 3000);
-setInterval(renderProgress, 500);
-setInterval(refreshPanel, 30000);
+setInterval(renderProgress, 250);
+setInterval(updateView, 1000);      // troca para o painel quando a pausa passa de 30 s
+setInterval(refreshPanel, 60000);   // atualiza "há X min" e o status
 </script>
 </body>
 </html>

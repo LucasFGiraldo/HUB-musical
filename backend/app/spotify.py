@@ -18,8 +18,12 @@ API_URL = "https://api.spotify.com/v1"
 SCOPES = "user-read-currently-playing user-read-playback-state"
 TOKEN_FILE = config.DATA_DIR / "spotify_tokens.json"
 
+# Conexão reaproveitada (keep-alive): evita um handshake TLS a cada consulta
+_client = httpx.Client(timeout=5)
 # state -> code_verifier dos logins em andamento
 _pending: dict[str, str] = {}
+# Tokens em memória; o arquivo só é lido na primeira vez
+_tokens: dict | None = None
 
 
 def login_url() -> str:
@@ -43,7 +47,7 @@ def exchange_code(code: str, state: str) -> None:
     verifier = _pending.pop(state, None)
     if verifier is None:
         raise ValueError("state desconhecido")
-    resp = httpx.post(TOKEN_URL, timeout=10, data={
+    resp = _client.post(TOKEN_URL, data={
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": config.SPOTIFY_REDIRECT_URI,
@@ -55,17 +59,20 @@ def exchange_code(code: str, state: str) -> None:
 
 
 def _save(tokens: dict) -> dict:
+    global _tokens
     tokens["expires_at"] = time.time() + tokens["expires_in"] - 60
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     TOKEN_FILE.write_text(json.dumps(tokens))
     os.chmod(TOKEN_FILE, 0o600)
+    _tokens = tokens
     return tokens
 
 
 def _load() -> dict | None:
-    if not TOKEN_FILE.exists():
-        return None
-    return json.loads(TOKEN_FILE.read_text())
+    global _tokens
+    if _tokens is None and TOKEN_FILE.exists():
+        _tokens = json.loads(TOKEN_FILE.read_text())
+    return _tokens
 
 
 def _access_token() -> str | None:
@@ -73,7 +80,7 @@ def _access_token() -> str | None:
     if tokens is None:
         return None
     if time.time() >= tokens["expires_at"]:
-        resp = httpx.post(TOKEN_URL, timeout=10, data={
+        resp = _client.post(TOKEN_URL, data={
             "grant_type": "refresh_token",
             "refresh_token": tokens["refresh_token"],
             "client_id": config.SPOTIFY_CLIENT_ID,
@@ -90,8 +97,8 @@ def now_playing() -> dict:
     token = _access_token()
     if token is None:
         return {"authorized": False}
-    resp = httpx.get(f"{API_URL}/me/player/currently-playing", timeout=10,
-                     headers={"Authorization": f"Bearer {token}"})
+    resp = _client.get(f"{API_URL}/me/player/currently-playing",
+                       headers={"Authorization": f"Bearer {token}"})
     if resp.status_code == 204:
         return {"authorized": True, "playing": False}
     resp.raise_for_status()

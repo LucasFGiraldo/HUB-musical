@@ -1,9 +1,10 @@
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from html import escape
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db, poller, spotify
@@ -46,6 +47,26 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
 @app.get("/api/now-playing")
 def now_playing():
     return poller.current()
+
+
+@app.get("/api/stream")
+async def stream():
+    """Eventos em tempo real: "now" (mudou a música/estado) e "history" (nova música registrada)."""
+    async def events():
+        q = poller.subscribe()
+        try:
+            yield f"event: now\ndata: {json.dumps(poller.current())}\n\n"
+            while True:
+                try:
+                    event, data = await asyncio.wait_for(q.get(), timeout=15)
+                    yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"  # mantém a conexão viva
+        finally:
+            poller.unsubscribe(q)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/history")
