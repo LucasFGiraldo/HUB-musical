@@ -21,6 +21,7 @@ BUFFER_SECONDS = 15
 WINDOW_SECONDS = 2              # áudio analisado pelo YAMNet a cada segundo
 RETRY_SECONDS = 10              # sem faixa identificada, intervalo entre tentativas
 LISTEN_GRACE_SECONDS = 3        # tolerância de silêncio antes de esconder "Ouvindo música..."
+ANNOUNCE_SECONDS = 2.5          # outra música confirmada: tempo do "Ouvindo música..." antes de mostrá-la
 MUSIC_CLASS = 132               # índice da classe "Music" (models/yamnet_class_map.csv)
 MODEL_FILE = config.ROOT / "backend" / "models" / "yamnet.tflite"
 DEVICE = os.environ.get("HUB_MIC_DEVICE", "plughw:1,0")
@@ -118,14 +119,24 @@ async def _identify(shazam: Shazam, pcm: bytes, epoch: int) -> None:
         return
     track = _parse(t)
     status.update(last_result=f"{track['title']} — {track['artists'][0]}", error=None)
-    if (poller.state["mic"] or {}).get("id") != track["id"]:
-        poller.state["mic"] = track
-        poller.set_listening(False)  # identificada: a tela passa a mostrar a faixa
-        poller.publish_now()
-        if track["id"] != _last_logged:
-            _last_logged = track["id"]
-            await asyncio.to_thread(db.add_play, track)
-            poller.publish("history", {})
+    current = poller.state["mic"]
+    if current is not None and current["id"] == track["id"]:
+        return  # mesma música (ex.: só uma respirada): a tela não muda
+    if current is not None:
+        # Confirmou outra música: "Ouvindo música..." por um instante e então a nova faixa
+        _drop_track()
+        poller.set_listening(True)
+        epoch = _epoch
+        await asyncio.sleep(ANNOUNCE_SECONDS)
+        if epoch != _epoch or poller.state["now"].get("playing"):
+            return
+    poller.state["mic"] = track
+    poller.set_listening(False)  # identificada: a tela passa a mostrar a faixa
+    poller.publish_now()
+    if track["id"] != _last_logged:
+        _last_logged = track["id"]
+        await asyncio.to_thread(db.add_play, track)
+        poller.publish("history", {})
 
 
 async def _listen(detector: _Detector, shazam: Shazam) -> None:
@@ -134,6 +145,7 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     buf: deque[bytes] = deque(maxlen=BUFFER_SECONDS)
     streak, gap, last_music, last_try = 0, 0, 0.0, float("-inf")
+    check_soon = False  # a música voltou depois de uma pausa: conferir a faixa antes do recheck normal
     identifying: asyncio.Task | None = None
     try:
         while settings.get().mic_enabled:
@@ -157,15 +169,14 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
             score, latest = await asyncio.to_thread(detector.music_scores, audio)
             status["music_score"] = round(score, 3)
 
-            # Pausa e volta da música com uma faixa na tela: provavelmente começou outra.
-            # Tira a faixa (aparece "Ouvindo música...") e identifica de novo sem esperar o recheck.
+            # Pausa e volta da música com uma faixa na tela: pode ter começado outra (ou foi só uma respirada).
+            # Confere em silêncio, com a faixa atual na tela; o "Ouvindo música..." só aparece se for outra.
             if latest < s.music_threshold:
                 gap += 1
             else:
                 if gap >= s.gap_seconds and poller.state["mic"] is not None:
-                    log.info("pausa de %s s entre músicas: identificando de novo", gap)
-                    _drop_track()
-                    streak, last_try = 0, float("-inf")
+                    check_soon = True
+                    streak = 0  # o trecho enviado ao Shazam começa aqui
                 gap = 0
 
             if score >= s.music_threshold:
@@ -183,9 +194,9 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
                     poller.set_listening(False)
 
             busy = identifying is not None and not identifying.done()
-            interval = s.recheck_seconds if poller.state["mic"] else RETRY_SECONDS
+            interval = s.recheck_seconds if poller.state["mic"] and not check_soon else RETRY_SECONDS
             if streak >= s.music_seconds and not busy and now - last_try >= interval:
-                last_try = now
+                last_try, check_soon = now, False
                 # Só o áudio desde que a música (re)começou, para não mandar o fim da faixa anterior
                 clip = b"".join(list(buf)[-min(s.clip_seconds, streak + 1):])
                 identifying = asyncio.create_task(_identify(shazam, clip, _epoch))
