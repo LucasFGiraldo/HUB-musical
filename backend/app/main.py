@@ -1,14 +1,16 @@
 import asyncio
+import ipaddress
 import json
 from contextlib import asynccontextmanager
 from html import escape
 
-from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse,
+                               RedirectResponse, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import config, db, listener, lyrics, poller, settings, spotify
+from . import auth, config, db, listener, lyrics, poller, settings, spotify
 
 
 @asynccontextmanager
@@ -20,7 +22,47 @@ async def lifespan(app: FastAPI):
         task.cancel()
 
 
-app = FastAPI(title="HUB Musical", lifespan=lifespan)
+app = FastAPI(title="HUB Musical", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    # Capas vêm do Spotify/Shazam (https); todo o resto só do próprio servidor
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline'; "
+                               "style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; "
+                               "base-uri 'none'; form-action 'self'",
+}
+
+
+def _local_host(host: str) -> bool:
+    """Só aceita endereços da rede de casa: nome .local, localhost ou IP privado. Barra o "DNS rebinding"
+    (um site da internet que finge ser o servidor para mexer nele pelo seu navegador)."""
+    if host.startswith("["):  # IPv6: [::1]:8888
+        name = host[1:host.find("]")]
+    else:
+        name = host.rsplit(":", 1)[0]
+    name = name.lower()
+    if name == "localhost" or name.endswith((".local", ".localhost")):
+        return True
+    try:
+        ip = ipaddress.ip_address(name)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback
+
+
+def _from_this_machine(request: Request) -> bool:
+    return bool(request.client) and ipaddress.ip_address(request.client.host).is_loopback
+
+
+@app.middleware("http")
+async def security(request: Request, call_next):
+    if not _local_host(request.headers.get("host", "")):
+        return PlainTextResponse("Endereço não permitido", status_code=400)
+    response = await call_next(request)
+    response.headers.update(SECURITY_HEADERS)
+    return response
 
 
 @app.get("/health")
@@ -29,12 +71,17 @@ def health():
 
 
 @app.get("/auth/login")
-def auth_login():
+def auth_login(request: Request):
+    # Só pelo túnel SSH (o próprio servidor): ninguém da rede troca a conta do Spotify
+    if not _from_this_machine(request):
+        raise HTTPException(403, "Faça o login do Spotify pelo túnel SSH (veja o README)")
     return RedirectResponse(spotify.login_url())
 
 
 @app.get("/callback")
-def auth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+def auth_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    if not _from_this_machine(request):
+        raise HTTPException(403, "Faça o login do Spotify pelo túnel SSH (veja o README)")
     if error:
         return HTMLResponse(f"<p>O Spotify recusou o login: {escape(error)}</p>", status_code=400)
     if not code or not state:
@@ -135,9 +182,32 @@ def default_settings():
     return settings.Settings()
 
 
+@app.get("/api/pin")
+def pin_status(request: Request):
+    return {"pin_set": auth.pin_set(), "ok": auth.check(request.cookies.get(auth.COOKIE))}
+
+
+@app.post("/api/pin")
+def pin_login(request: Request, pin: str = Body(..., embed=True)):
+    """Cria o PIN (se ainda não existe) ou confere o PIN; acertou, ganha o cookie de 30 dias."""
+    ip = request.client.host if request.client else "?"
+    if wait := auth.locked_for(ip):
+        raise HTTPException(429, f"Tentativas demais. Tente de novo em {wait // 60 + 1} min.")
+    if not auth.valid_pin(pin):
+        raise HTTPException(422, "O PIN tem de 4 a 8 números.")
+    token = auth.login(pin, ip) if auth.pin_set() else auth.create(pin)
+    if not token:
+        raise HTTPException(401, "PIN incorreto.")
+    response = JSONResponse({"ok": True})
+    response.set_cookie(auth.COOKIE, token, max_age=auth.SESSION_SECONDS, httponly=True, samesite="strict")
+    return response
+
+
 @app.put("/api/settings")
-async def put_settings(changes: dict = Body(...)):
+async def put_settings(request: Request, changes: dict = Body(...)):
     # async: publish() mexe nas filas do asyncio e precisa rodar no laço principal
+    if not auth.check(request.cookies.get(auth.COOKIE)):
+        raise HTTPException(401, "pin")
     try:
         saved = settings.update(changes)
     except ValidationError as exc:

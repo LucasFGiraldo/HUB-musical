@@ -172,6 +172,11 @@
   .savebar.on { transform: none; }
   .savebar .inner { max-width: 980px; margin: 0 auto; padding: 12px 20px; display: flex; gap: 10px; align-items: center; }
   .savebar .msg { flex: 1; color: var(--muted); font-size: 14px; }
+  .savebar input {
+    width: 120px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+    letter-spacing: .3em; font-variant-numeric: tabular-nums;
+  }
+  .savebar input[hidden] { display: none; }
   .btn { border: 1px solid var(--line); background: var(--bg); padding: 10px 16px; border-radius: 10px; cursor: pointer; }
   .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .linkbtn { background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; padding: 10px 0; cursor: pointer; }
@@ -340,6 +345,7 @@
 <div class="savebar" id="savebar" role="region" aria-label="Alterações não salvas">
   <div class="inner">
     <span class="msg" id="save-msg">Alterações não salvas</span>
+    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="current-password" aria-label="PIN do painel" hidden>
     <button type="button" class="btn" id="discard">Descartar</button>
     <button type="button" class="btn primary" id="save">Salvar alterações</button>
   </div>
@@ -620,7 +626,26 @@ function toast(text) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 2200);
 }
 
+/* PIN: o servidor só aceita mudanças de quem digitou o PIN (vale 30 dias neste aparelho) */
+function askPin(created) {
+  $("pin").hidden = false; $("pin").value = ""; $("pin").focus();
+  $("save-msg").textContent = created ? "Digite o PIN para salvar" : "Crie um PIN de 4 a 8 números para proteger os ajustes";
+  $("save").textContent = created ? "Confirmar PIN" : "Criar PIN e salvar";
+}
+function hidePin() { $("pin").hidden = true; $("save").textContent = "Salvar alterações"; }
+async function sendPin() {
+  const res = await fetch("/api/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: $("pin").value }) }).catch(() => null);
+  if (!res) { $("save-msg").textContent = "Sem conexão com o servidor. Tente de novo."; return false; }
+  if (res.ok) { hidePin(); return true; }
+  const err = await res.json().catch(() => ({}));
+  $("save-msg").textContent = typeof err.detail === "string" ? err.detail : "PIN não aceito.";
+  $("pin").value = ""; $("pin").focus();
+  return false;
+}
+$("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") $("save").click(); });
+
 $("save").addEventListener("click", async () => {
+  if (!$("pin").hidden && !(await sendPin())) return;
   clearErrors();
   const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(readForm()) }).catch(() => null);
   if (!res) { $("save-msg").textContent = "Sem conexão com o servidor. Tente de novo."; return; }
@@ -628,6 +653,11 @@ $("save").addEventListener("click", async () => {
     saved = await res.json();
     fillForm(saved); applyTheme();
     toast("Ajustes salvos");
+    return;
+  }
+  if (res.status === 401) {
+    const s = await fetch("/api/pin").then((r) => r.json()).catch(() => ({ pin_set: true }));
+    askPin(s.pin_set);
     return;
   }
   const err = await res.json().catch(() => ({}));
@@ -642,7 +672,7 @@ $("save").addEventListener("click", async () => {
   }
   $("save-msg").textContent = "Corrija os campos marcados";
 });
-$("discard").addEventListener("click", () => fillForm(saved));
+$("discard").addEventListener("click", () => { hidePin(); fillForm(saved); });
 $("reset").addEventListener("click", () => {
   if (!defaults) return;
   fillForm({ ...defaults, ignored_devices: saved ? saved.ignored_devices : [] });

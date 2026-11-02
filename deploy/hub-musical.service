@@ -6,6 +6,9 @@ WorkingDirectory=%h/hub-musical/backend
 ExecStart=%h/hub-musical/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8888 --timeout-graceful-shutdown 3
 Restart=on-failure
 RestartSec=5
+# Arquivos novos (tokens, banco, PIN) só legíveis pelo usuário; o processo nunca ganha mais privilégios
+UMask=0077
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=default.target
