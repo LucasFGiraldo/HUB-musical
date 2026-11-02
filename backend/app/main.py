@@ -3,19 +3,21 @@ import json
 from contextlib import asynccontextmanager
 from html import escape
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
-from . import config, db, poller, spotify
+from . import config, db, listener, poller, settings, spotify
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
-    task = asyncio.create_task(poller.run())
+    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(listener.run())]
     yield
-    task.cancel()
+    for task in tasks:
+        task.cancel()
 
 
 app = FastAPI(title="HUB Musical", lifespan=lifespan)
@@ -88,7 +90,21 @@ def status():
         "last_error": s["last_error"],
         "started_at": s["started_at"],
         "poll_seconds": poller.POLL_SECONDS,
+        "mic": listener.status,
     }
+
+
+@app.get("/api/settings")
+def get_settings():
+    return settings.get()
+
+
+@app.put("/api/settings")
+def put_settings(changes: dict = Body(...)):
+    try:
+        return settings.update(changes)
+    except ValidationError as exc:
+        raise HTTPException(422, exc.errors(include_url=False, include_context=False))
 
 
 app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")

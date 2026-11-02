@@ -25,6 +25,22 @@
   .times { display: flex; justify-content: space-between; color: var(--muted);
     font-size: clamp(12px, 1.4vw, 18px); margin-top: .5em; font-variant-numeric: tabular-nums; }
   #paused { color: var(--muted); font-size: clamp(12px, 1.4vw, 18px); margin-top: 1em; }
+  #source { display: inline-block; color: var(--muted); border: 1px solid var(--bar); border-radius: 999px;
+    padding: .2em .8em; font-size: clamp(11px, 1.2vw, 15px); margin: 0 0 1.2em; }
+
+  button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--bar);
+    border-radius: 8px; padding: .4em 1em; cursor: pointer; }
+  dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--bar); border-radius: 12px;
+    padding: 1.5em; width: min(92vw, 440px); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h2 { margin: 0 0 1em; font-size: 18px; }
+  dialog label { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 1em;
+    margin-bottom: .8em; font-size: 14px; }
+  dialog label small { display: block; color: var(--muted); font-size: 12px; }
+  dialog input[type=number] { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--bar);
+    border-radius: 6px; padding: .3em .5em; width: 100%; }
+  dialog .actions { display: flex; justify-content: flex-end; gap: .6em; margin-top: 1.2em; }
+  #settings-msg { color: var(--warn); font-size: 13px; min-height: 1.2em; margin: .5em 0 0; }
 
   /* Painel de espera */
   #idle { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 2.5vh; padding: 3vh 3vw; }
@@ -74,8 +90,11 @@
     <h1 id="title"></h1>
     <p id="artists"></p>
     <p id="album"></p>
-    <div class="progress"><div id="bar"></div></div>
-    <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+    <p id="source"></p>
+    <div id="progress-wrap">
+      <div class="progress"><div id="bar"></div></div>
+      <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+    </div>
     <p id="paused" class="hidden">Pausado</p>
   </div>
 </section>
@@ -106,11 +125,34 @@
   </div>
   <footer>
     <span id="p-poll">Consulta ao Spotify: –</span>
-    <span>Microfone: fase 2</span>
+    <span id="p-mic">Microfone: –</span>
     <span id="p-total">Músicas registradas: –</span>
     <span id="p-uptime">Servidor no ar desde –</span>
+    <button id="open-settings" type="button">Parâmetros</button>
   </footer>
 </section>
+
+<dialog id="settings">
+  <form id="settings-form" method="dialog">
+    <h2>Parâmetros do microfone</h2>
+    <label>Microfone ligado <input type="checkbox" name="mic_enabled"></label>
+    <label><span>Confiança mínima de música<small>0,05 a 0,95 — maior ignora mais barulho</small></span>
+      <input type="number" name="music_threshold" min="0.05" max="0.95" step="0.05"></label>
+    <label><span>Segundos de música antes de identificar<small>1 a 30</small></span>
+      <input type="number" name="music_seconds" min="1" max="30" step="1"></label>
+    <label><span>Segundos de áudio enviados ao Shazam<small>3 a 15</small></span>
+      <input type="number" name="clip_seconds" min="3" max="15" step="1"></label>
+    <label><span>Conferir troca de faixa a cada (s)<small>10 a 300</small></span>
+      <input type="number" name="recheck_seconds" min="10" max="300" step="5"></label>
+    <label><span>Tirar da tela após silêncio de (s)<small>5 a 120</small></span>
+      <input type="number" name="silence_seconds" min="5" max="120" step="5"></label>
+    <p id="settings-msg"></p>
+    <div class="actions">
+      <button type="button" id="close-settings">Cancelar</button>
+      <button type="submit" id="save-settings">Salvar</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -148,7 +190,7 @@ function show(view) {
 /* ---------- Tocando agora ---------- */
 
 function renderProgress() {
-  if (!track || !track.title) return;
+  if (!track || !track.title || !track.duration_ms) return;
   const progress = track.playing
     ? Math.min(track.duration_ms, track.progress_ms + (Date.now() - fetchedAt))
     : track.progress_ms;
@@ -165,7 +207,11 @@ function applyNow(data) {
   if (!track || track.cover !== data.cover) $("cover").src = data.cover || "";
   $("title").textContent = data.title;
   $("artists").textContent = data.artists.join(", ");
-  $("album").textContent = data.release_date ? `${data.album} · ${data.release_date.slice(0, 4)}` : data.album;
+  $("album").textContent = [data.album, data.release_date && data.release_date.slice(0, 4)]
+    .filter(Boolean).join(" · ");
+  $("source").textContent = data.source === "mic" ? "Ouvido pelo microfone" : "Spotify";
+  // O Shazam não informa duração nem progresso
+  $("progress-wrap").classList.toggle("hidden", !data.duration_ms);
   $("duration").textContent = fmt(data.duration_ms);
   $("paused").classList.toggle("hidden", data.playing);
   track = data;
@@ -227,7 +273,8 @@ async function refreshPanel() {
       const img = el("img"); img.src = h.cover || ""; img.alt = "";
       const text = el("div");
       text.style.minWidth = "0";
-      text.append(el("div", "t", h.title), el("div", "a", h.artists));
+      text.append(el("div", "t", h.title),
+        el("div", "a", h.source === "mic" ? `${h.artists} · microfone` : h.artists));
       li.append(img, text, el("span", "when", ago(h.played_at)));
       recent.append(li);
     }
@@ -248,6 +295,10 @@ async function refreshPanel() {
     else if (status.last_error) setChip("chip-spotify", "warn", `Spotify: ${status.last_error}`);
     else setChip("chip-spotify", "ok", "Spotify");
     $("p-poll").textContent = `Consulta ao Spotify: a cada ${status.poll_seconds} s`;
+    const mic = status.mic;
+    $("p-mic").textContent = `Microfone: ${mic.error ? `erro (${mic.error})` : mic.state}` +
+      (mic.music_score !== null ? ` · música ${Math.round(mic.music_score * 100)}%` : "") +
+      (mic.last_result ? ` · último: ${mic.last_result}` : "");
     $("p-total").textContent = `Músicas registradas: ${stats.total_plays}`;
     $("p-uptime").textContent = `Servidor no ar desde ${new Date(status.started_at * 1000)
       .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
@@ -256,13 +307,46 @@ async function refreshPanel() {
   }
 }
 
+/* ---------- Parâmetros ---------- */
+
+const form = $("settings-form");
+
+$("open-settings").addEventListener("click", async () => {
+  const s = await fetch("/api/settings").then((r) => r.json());
+  for (const [k, v] of Object.entries(s)) {
+    const input = form.elements[k];
+    if (!input) continue;
+    if (input.type === "checkbox") input.checked = v; else input.value = v;
+  }
+  $("settings-msg").textContent = "";
+  $("settings").showModal();
+});
+
+$("close-settings").addEventListener("click", () => $("settings").close());
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = {};
+  for (const input of form.querySelectorAll("input")) {
+    body[input.name] = input.type === "checkbox" ? input.checked : Number(input.value);
+  }
+  const res = await fetch("/api/settings", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (res.ok) { $("settings").close(); refreshPanel(); return; }
+  const err = await res.json().catch(() => ({}));
+  $("settings-msg").textContent = Array.isArray(err.detail)
+    ? `Valor inválido em: ${err.detail.map((d) => d.loc.at(-1)).join(", ")}`
+    : "Não foi possível salvar";
+});
+
 tickClock();
 connect();
 refreshPanel();
 setInterval(tickClock, 1000);
 setInterval(renderProgress, 250);
 setInterval(updateView, 1000);      // troca para o painel quando a pausa passa de 30 s
-setInterval(refreshPanel, 60000);   // atualiza "há X min" e o status
+setInterval(refreshPanel, 10000);   // atualiza "há X min" e o status do microfone
 </script>
 </body>
 </html>

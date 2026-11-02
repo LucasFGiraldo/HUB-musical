@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 httpx
 python-dotenv
+numpy
+ai-edge-litert
+shazamio

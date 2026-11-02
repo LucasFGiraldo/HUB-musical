@@ -14,7 +14,8 @@ SEEK_TOLERANCE_MS = 2000  # diferença de progresso que indica um pulo na músic
 log = logging.getLogger("hub.poller")
 
 state = {
-    "now": {"authorized": False},
+    "now": {"authorized": False},   # Spotify
+    "mic": None,                    # faixa identificada pelo microfone (listener)
     "fetched_at": 0.0,
     "last_ok": None,
     "last_error": None,
@@ -25,7 +26,10 @@ _subscribers: set[asyncio.Queue] = set()
 
 
 def current() -> dict:
-    """Último estado, com o progresso avançado até agora."""
+    """O que a tela deve mostrar: o Spotify tocando tem prioridade; senão, a faixa do microfone.
+    O progresso do Spotify é avançado até agora."""
+    if not state["now"].get("playing") and state["mic"]:
+        return dict(state["mic"], authorized=state["now"].get("authorized", False))
     now = dict(state["now"])
     if now.get("playing") and now.get("progress_ms") is not None:
         elapsed = int((time.time() - state["fetched_at"]) * 1000)
@@ -43,11 +47,15 @@ def unsubscribe(q: asyncio.Queue) -> None:
     _subscribers.discard(q)
 
 
-def _publish(event: str, data: dict) -> None:
+def publish(event: str, data: dict) -> None:
     for q in list(_subscribers):
         if q.full():  # tela lenta: descarta o evento mais antigo
             q.get_nowait()
         q.put_nowait((event, data))
+
+
+def publish_now() -> None:
+    publish("now", current())
 
 
 def _changed(old: dict, new: dict, elapsed_ms: int) -> bool:
@@ -70,11 +78,11 @@ async def run() -> None:
             old, old_t = state["now"], state["fetched_at"]
             state.update(now=now, fetched_at=t, last_ok=t, last_error=None)
             if _changed(old, now, int((t - old_t) * 1000)):
-                _publish("now", current())
+                publish_now()
             if now.get("playing") and now.get("id") and now["id"] != last_id:
                 await asyncio.to_thread(db.add_play, now)
                 last_id = now["id"]
-                _publish("history", {})
+                publish("history", {})
         except httpx.HTTPStatusError as exc:
             state["last_error"] = f"HTTP {exc.response.status_code}"
             if exc.response.status_code == 429:

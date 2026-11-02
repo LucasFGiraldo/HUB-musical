@@ -23,5 +23,13 @@ A interface fica em `http://hub-automacoes.local:8888`.
 Login do Spotify (só na primeira vez ou se o token for perdido): abra um túnel com
 `ssh -L 8888:127.0.0.1:8888 lucas@hub-automacoes.local` e acesse `http://127.0.0.1:8888/auth/login`.
 
+## Microfone (fase 2)
+`backend/app/listener.py` lê o microfone com `arecord` (dispositivo em `HUB_MIC_DEVICE`, padrão `plughw:1,0`).
+A cada segundo, o YAMNet avalia os últimos 2 s; com música por alguns segundos seguidos, o Shazam identifica a faixa.
+Só roda quando o Spotify não está tocando. Parâmetros em `/api/settings` (botão "Parâmetros" na tela).
+
+O modelo `backend/models/yamnet.tflite` e o `yamnet_class_map.csv` vêm do projeto
+[now-playing](https://github.com/maurocastermans/now-playing) (MIT), que por sua vez usa o YAMNet do Google.
+
 ## Segredos
 Client ID, tokens e dados locais ficam fora do repositório (`.gitignore`).
