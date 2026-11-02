@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HUB Musical</title>
+<style>
+  :root { --bg: #0b0b0d; --fg: #f2f2f2; --muted: #8a8a92; --bar: #2a2a30; --accent: #1db954; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { height: 100%; display: flex; align-items: center; justify-content: center; gap: 4vw; padding: 4vw; }
+  #cover { width: min(42vw, 70vh); aspect-ratio: 1; object-fit: cover; border-radius: 12px;
+    background: var(--bar); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #info { flex: 1; min-width: 0; max-width: 46vw; }
+  #title { font-size: clamp(24px, 4.5vw, 64px); font-weight: 700; margin: 0 0 .2em; line-height: 1.1; }
+  #artists { font-size: clamp(16px, 2.6vw, 34px); color: var(--fg); opacity: .85; margin: 0 0 .3em; }
+  #album { font-size: clamp(13px, 1.8vw, 22px); color: var(--muted); margin: 0 0 1.5em; }
+  .progress { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; }
+  #bar { height: 100%; width: 0; background: var(--accent); }
+  .times { display: flex; justify-content: space-between; color: var(--muted);
+    font-size: clamp(12px, 1.4vw, 18px); margin-top: .5em; font-variant-numeric: tabular-nums; }
+  #message { color: var(--muted); font-size: clamp(16px, 2.4vw, 28px); text-align: center; }
+  .hidden { display: none !important; }
+  @media (max-aspect-ratio: 1/1) {
+    main { flex-direction: column; text-align: center; }
+    #cover { width: min(80vw, 50vh); }
+    #info { max-width: 90vw; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p id="message">Carregando…</p>
+  <img id="cover" class="hidden" alt="">
+  <div id="info" class="hidden">
+    <h1 id="title"></h1>
+    <p id="artists"></p>
+    <p id="album"></p>
+    <div class="progress"><div id="bar"></div></div>
+    <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let track = null;      // último estado vindo do servidor
+let fetchedAt = 0;     // quando esse estado chegou, para avançar a barra localmente
+
+function fmt(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function showMessage(text) {
+  $("message").textContent = text;
+  $("message").classList.remove("hidden");
+  $("cover").classList.add("hidden");
+  $("info").classList.add("hidden");
+}
+
+function render() {
+  if (!track || !track.title) return;
+  const progress = track.playing
+    ? Math.min(track.duration_ms, track.progress_ms + (Date.now() - fetchedAt))
+    : track.progress_ms;
+  $("bar").style.width = `${(progress / track.duration_ms) * 100}%`;
+  $("elapsed").textContent = fmt(progress);
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/api/now-playing");
+    const data = await res.json();
+    if (!res.ok) { showMessage("Erro ao falar com o Spotify"); return; }
+    if (!data.authorized) { showMessage("Spotify não conectado"); track = null; return; }
+    if (!data.title) { showMessage("Nada tocando agora"); track = null; return; }
+    if (!track || track.cover !== data.cover) $("cover").src = data.cover || "";
+    $("title").textContent = data.title;
+    $("artists").textContent = data.artists.join(", ");
+    $("album").textContent = data.release_date ? `${data.album} · ${data.release_date.slice(0, 4)}` : data.album;
+    $("duration").textContent = fmt(data.duration_ms);
+    $("message").classList.add("hidden");
+    $("cover").classList.remove("hidden");
+    $("info").classList.remove("hidden");
+    track = data;
+    fetchedAt = Date.now();
+    render();
+  } catch {
+    showMessage("Servidor indisponível");
+  }
+}
+
+poll();
+setInterval(poll, 3000);
+setInterval(render, 500);
+</script>
+</body>
+</html>
