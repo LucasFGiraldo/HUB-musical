@@ -670,6 +670,10 @@ async function init() {
   });
 }
 
+addEventListener("hashchange", () => {
+  const id = location.hash.slice(1);
+  if (["agora", "stats", "ajustes"].includes(id)) selectTab(id, false);
+});
 const start = location.hash.slice(1);
 selectTab(["agora", "stats", "ajustes"].includes(start) ? start : "agora", false);
 init();
