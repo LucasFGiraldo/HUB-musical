@@ -25,6 +25,9 @@ class Settings(BaseModel):
     lyrics_enabled: bool = True
     # Aparelhos do Spotify a ignorar (ex.: o carro): nome exato, sem diferenciar maiúsculas
     ignored_devices: list[str] = []
+    # Horários em que a tela troca para o tema noturno e volta ao claro (HH:MM)
+    night_from: str = Field("19:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    day_from: str = Field("08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 _current: Settings | None = None

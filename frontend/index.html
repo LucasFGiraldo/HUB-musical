@@ -316,8 +316,10 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const IDLE_AFTER_PAUSE_MS = 30000;   // pausado por mais que isso → tela de espera
-const NIGHT_FROM = 19 * 60 + 30;     // 19:30 → noite
-const DAY_FROM = 8 * 60;             // 08:00 → dia
+// Horários do tema (padrão 19:30 e 08:00); o servidor manda os do painel no evento "settings"
+let NIGHT_FROM = 19 * 60 + 30;
+let DAY_FROM = 8 * 60;
+const toMinutes = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
 
 let track = null;                    // último estado vindo do servidor
 let fetchedAt = 0;                   // quando chegou, para avançar a barra localmente
@@ -336,7 +338,8 @@ const fmt = (ms) => {
 function applyTheme() {
   const forced = new URLSearchParams(location.search).get("theme");
   const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
-  const night = forced ? forced === "night" : (m >= NIGHT_FROM || m < DAY_FROM);
+  const night = forced ? forced === "night"
+    : NIGHT_FROM > DAY_FROM ? (m >= NIGHT_FROM || m < DAY_FROM) : (m >= NIGHT_FROM && m < DAY_FROM);
   document.documentElement.dataset.theme = night ? "night" : "day";
 }
 
@@ -538,6 +541,12 @@ function connect() {
     updateView();
   });
   es.addEventListener("history", refreshRecent);
+  es.addEventListener("settings", (e) => {
+    const s = JSON.parse(e.data);
+    NIGHT_FROM = toMinutes(s.night_from);
+    DAY_FROM = toMinutes(s.day_from);
+    applyTheme();
+  });
   es.addEventListener("error", () => { $("st-server").className = "bad"; });
 }
 

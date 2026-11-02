@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from html import escape
 
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -59,6 +59,7 @@ async def stream():
         try:
             yield f"event: now\ndata: {json.dumps(poller.current())}\n\n"
             yield f"event: listening\ndata: {json.dumps(poller.listening())}\n\n"
+            yield f"event: settings\ndata: {settings.get().model_dump_json()}\n\n"
             while True:
                 try:
                     event, data = await asyncio.wait_for(q.get(), timeout=15)
@@ -97,7 +98,17 @@ def get_lyrics(track: str):
 
 @app.get("/api/stats")
 def stats(days: int = 30):
-    return db.stats(days)
+    return db.stats(max(1, min(days, 365)))
+
+
+@app.get("/api/devices")
+def devices():
+    """Aparelhos do Spotify já vistos (para escolher quais ignorar)."""
+    seen = db.devices()
+    current = poller.state["device"]
+    if current and current not in seen:
+        seen.insert(0, current)
+    return {"current": current, "seen": seen}
 
 
 @app.get("/api/status")
@@ -119,12 +130,25 @@ def get_settings():
     return settings.get()
 
 
+@app.get("/api/settings/defaults")
+def default_settings():
+    return settings.Settings()
+
+
 @app.put("/api/settings")
-def put_settings(changes: dict = Body(...)):
+async def put_settings(changes: dict = Body(...)):
+    # async: publish() mexe nas filas do asyncio e precisa rodar no laço principal
     try:
-        return settings.update(changes)
+        saved = settings.update(changes)
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False))
+    poller.publish("settings", saved.model_dump())  # a tela aplica na hora (ex.: horários do tema)
+    return saved
+
+
+@app.get("/painel")
+def painel():
+    return FileResponse(config.FRONTEND_DIR / "painel.html")
 
 
 app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")
