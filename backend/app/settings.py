@@ -28,7 +28,7 @@ class Settings(BaseModel):
     # Horários em que a tela troca para o tema noturno e volta ao claro (HH:MM)
     night_from: str = Field("19:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     day_from: str = Field("08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    # Tela de espera: alterna entre as últimas músicas e as leituras do Hardcover
+    # Tela de espera: alterna entre as últimas músicas e as leituras da estante
     books_enabled: bool = True
     idle_rotate_seconds: int = Field(10, ge=5, le=120)
     # Quantas capas de livro na tela, e se os já lidos completam a fila depois dos "lendo"

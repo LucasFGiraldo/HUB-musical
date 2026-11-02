@@ -4,19 +4,21 @@ import json
 from contextlib import asynccontextmanager
 from html import escape
 
+import httpx
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse,
-                               RedirectResponse, StreamingResponse)
+                               RedirectResponse, Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import auth, books, config, db, listener, lyrics, poller, settings, spotify
+from . import auth, catalog, config, db, listener, lyrics, poller, settings, shelf, spotify
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
-    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(listener.run()), asyncio.create_task(books.run())]
+    shelf.init()
+    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(listener.run())]
     yield
     for task in tasks:
         task.cancel()
@@ -29,7 +31,7 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     # Capas vêm do Spotify/Shazam (https); todo o resto só do próprio servidor
-    "Content-Security-Policy": "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline'; "
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline'; "
                                "style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; "
                                "base-uri 'none'; form-action 'self'",
 }
@@ -107,7 +109,7 @@ async def stream():
             yield f"event: now\ndata: {json.dumps(poller.current())}\n\n"
             yield f"event: listening\ndata: {json.dumps(poller.listening())}\n\n"
             yield f"event: settings\ndata: {settings.get().model_dump_json()}\n\n"
-            yield f"event: books\ndata: {json.dumps(books.snapshot())}\n\n"
+            yield f"event: books\ndata: {json.dumps(shelf.snapshot())}\n\n"
             while True:
                 try:
                     event, data = await asyncio.wait_for(q.get(), timeout=15)
@@ -170,31 +172,184 @@ def status():
         "poll_seconds": poller.POLL_SECONDS,
         "mic": listener.status,
         "spotify_device": s["device"],
-        "books": {"status": books.state["status"], "updated_at": books.state["updated_at"],
-                  "reading": len(books.state["reading"]), "read": books.state["read_count"]},
     }
+
+
+# ---------- Estante de livros ----------
+# Escritas pedem o PIN do painel; as funções são async para publicar na tela pelo laço principal.
+
+def _require_pin(request: Request) -> None:
+    if not auth.check(request.cookies.get(auth.COOKIE)):
+        raise HTTPException(401, "pin")
+
+
+def _book_in(data: dict) -> shelf.BookIn:
+    try:
+        return shelf.BookIn(**data)
+    except ValidationError as exc:
+        raise HTTPException(422, exc.errors(include_url=False, include_context=False, include_input=False))
+
+
+def _shelf_changed() -> None:
+    poller.publish("books", shelf.snapshot())  # tela de espera
+    poller.publish("library", {})              # painéis abertos recarregam
+
+
+async def _image_body(request: Request) -> bytes:
+    if int(request.headers.get("content-length") or 0) > catalog.MAX_IMAGE_BYTES:
+        raise HTTPException(413, "Imagem grande demais (máximo 10 MB).")
+    data = await request.body()
+    if not data or len(data) > catalog.MAX_IMAGE_BYTES:
+        raise HTTPException(413 if data else 400, "Imagem grande demais (máximo 10 MB)." if data else "Sem imagem.")
+    return data
 
 
 @app.get("/api/books")
 def get_books():
-    """Leituras do Hardcover para a tela de espera (lendo agora + últimos lidos)."""
-    return books.snapshot()
+    """Livros para a tela de espera (lendo agora + últimos lidos)."""
+    return shelf.snapshot()
 
 
 @app.get("/api/library")
 def get_library(days: int = 30):
-    """Resumo das leituras para o painel: lendo agora, contagens e lidos no período."""
-    return books.library(max(1, min(days, 365)))
+    """Resumo das leituras para o painel: lendo agora, contagens, páginas por dia e lidos."""
+    return shelf.library(max(1, min(days, 365)))
 
 
-@app.post("/api/books/refresh")
-async def refresh_books():
-    # async: acorda a tarefa do Hardcover no laço principal
-    if not config.HARDCOVER_TOKEN:
-        raise HTTPException(409, "O Hardcover ainda não está conectado (falta o token).")
-    if wait := books.refresh_now():
-        raise HTTPException(429, f"Acabou de atualizar. Tente de novo em {wait} s.")
+@app.get("/api/shelf")
+def get_shelf():
+    return shelf.all_books()
+
+
+@app.get("/api/catalog/search")
+async def catalog_search(q: str):
+    if len(q.strip()) < 2:
+        return []
+    try:
+        return await asyncio.to_thread(catalog.search, q.strip()[:200])
+    except httpx.HTTPError:
+        raise HTTPException(502, "O Open Library não respondeu. Tente de novo em instantes.")
+
+
+@app.get("/api/catalog/editions")
+async def catalog_editions(work: str, authors: str = ""):
+    try:
+        return await asyncio.to_thread(catalog.editions, work, authors[:300])
+    except catalog.NotFound as exc:
+        raise HTTPException(404, str(exc))
+    except httpx.HTTPError:
+        raise HTTPException(502, "O Open Library não respondeu. Tente de novo em instantes.")
+
+
+@app.post("/api/catalog/isbn-photo")
+async def isbn_photo(request: Request):
+    _require_pin(request)
+    data = await _image_body(request)
+    try:
+        isbn = await asyncio.to_thread(catalog.isbn_from_photo, data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    if not isbn:
+        raise HTTPException(404, "Não achei o código de barras. Tente uma foto mais de perto, com boa luz.")
+    return {"isbn": isbn}
+
+
+@app.post("/api/shelf")
+async def add_book(request: Request, payload: dict = Body(...)):
+    """Adiciona um livro. `cover_url` (capa do Open Library) é baixada e guardada no servidor."""
+    _require_pin(request)
+    cover = payload.pop("cover_url", None)
+    data = _book_in(payload)
+    if data.ol_key and (not data.pages or not data.year):
+        extra = await asyncio.to_thread(catalog.edition_details, data.ol_key)
+        data = data.model_copy(update={k: v for k, v in extra.items() if v and not getattr(data, k)})
+    try:
+        book_id = await asyncio.to_thread(shelf.create, data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    if cover:
+        try:
+            img = await asyncio.to_thread(catalog.download_image, cover)
+            shelf.set_cover(book_id, await asyncio.to_thread(catalog.save_cover, book_id, img))
+        except (ValueError, httpx.HTTPError):
+            pass  # sem capa: dá para pôr depois pela ficha
+    _shelf_changed()
+    return shelf.get(book_id)
+
+
+@app.patch("/api/shelf/{book_id}")
+async def edit_book(book_id: int, request: Request, payload: dict = Body(...)):
+    _require_pin(request)
+    try:
+        book = await asyncio.to_thread(shelf.update, book_id, _book_in(payload))
+    except KeyError:
+        raise HTTPException(404, "Livro não encontrado.")
+    _shelf_changed()
+    return book
+
+
+@app.delete("/api/shelf/{book_id}")
+async def remove_book(book_id: int, request: Request):
+    _require_pin(request)
+    await asyncio.to_thread(shelf.delete, book_id)
+    catalog.delete_cover(book_id)
+    _shelf_changed()
     return {"ok": True}
+
+
+@app.put("/api/shelf/{book_id}/cover")
+async def upload_cover(book_id: int, request: Request):
+    """Capa enviada pelo painel (foto do celular ou imagem salva), no corpo da requisição."""
+    _require_pin(request)
+    if not shelf.get(book_id):
+        raise HTTPException(404, "Livro não encontrado.")
+    data = await _image_body(request)
+    try:
+        shelf.set_cover(book_id, await asyncio.to_thread(catalog.save_cover, book_id, data))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    _shelf_changed()
+    return shelf.get(book_id)
+
+
+@app.post("/api/shelf/{book_id}/cover-url")
+async def cover_from_link(book_id: int, request: Request, url: str = Body(..., embed=True)):
+    _require_pin(request)
+    if not shelf.get(book_id):
+        raise HTTPException(404, "Livro não encontrado.")
+    try:
+        img = await asyncio.to_thread(catalog.download_image, url.strip())
+        shelf.set_cover(book_id, await asyncio.to_thread(catalog.save_cover, book_id, img))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except httpx.HTTPError:
+        raise HTTPException(502, "Não consegui baixar a imagem desse link.")
+    _shelf_changed()
+    return shelf.get(book_id)
+
+
+@app.delete("/api/shelf/{book_id}/cover")
+async def remove_cover(book_id: int, request: Request):
+    _require_pin(request)
+    catalog.delete_cover(book_id)
+    shelf.set_cover(book_id, None)
+    _shelf_changed()
+    return shelf.get(book_id)
+
+
+@app.get("/api/shelf/export.csv")
+def export_shelf(request: Request):
+    _require_pin(request)  # tem as observações pessoais
+    return Response(shelf.export_csv(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="minhas-leituras.csv"'})
+
+
+@app.get("/covers/{book_id}.jpg")
+def cover_file(book_id: int):
+    path = catalog.COVERS_DIR / f"{book_id}.jpg"
+    if not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"})  # ?v= muda a cada troca
 
 
 @app.get("/api/settings")
@@ -238,7 +393,7 @@ async def put_settings(request: Request, changes: dict = Body(...)):
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False))
     poller.publish("settings", saved.model_dump())  # a tela aplica na hora (ex.: horários do tema)
-    poller.publish("books", books.snapshot())        # quantidade de capas / mostrar lidos
+    poller.publish("books", shelf.snapshot())        # quantidade de capas / mostrar lidos
     return saved
 
 
