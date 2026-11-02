@@ -5,60 +5,147 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HUB Musical</title>
 <style>
-  :root { --bg: #0b0b0d; --fg: #f2f2f2; --muted: #8a8a92; --bar: #2a2a30; --accent: #1db954; }
+  :root { --bg: #0b0b0d; --panel: #141418; --fg: #f2f2f2; --muted: #8a8a92; --bar: #2a2a30;
+    --accent: #1db954; --warn: #e5a50a; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { height: 100%; display: flex; align-items: center; justify-content: center; gap: 4vw; padding: 4vw; }
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  .hidden { display: none !important; }
+
+  /* Tocando agora */
+  #now { height: 100%; display: flex; align-items: center; justify-content: center; gap: 4vw; padding: 4vw; }
   #cover { width: min(42vw, 70vh); aspect-ratio: 1; object-fit: cover; border-radius: 12px;
     background: var(--bar); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
   #info { flex: 1; min-width: 0; max-width: 46vw; }
   #title { font-size: clamp(24px, 4.5vw, 64px); font-weight: 700; margin: 0 0 .2em; line-height: 1.1; }
-  #artists { font-size: clamp(16px, 2.6vw, 34px); color: var(--fg); opacity: .85; margin: 0 0 .3em; }
+  #artists { font-size: clamp(16px, 2.6vw, 34px); opacity: .85; margin: 0 0 .3em; }
   #album { font-size: clamp(13px, 1.8vw, 22px); color: var(--muted); margin: 0 0 1.5em; }
   .progress { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; }
   #bar { height: 100%; width: 0; background: var(--accent); }
   .times { display: flex; justify-content: space-between; color: var(--muted);
     font-size: clamp(12px, 1.4vw, 18px); margin-top: .5em; font-variant-numeric: tabular-nums; }
-  #message { color: var(--muted); font-size: clamp(16px, 2.4vw, 28px); text-align: center; }
-  .hidden { display: none !important; }
+  #paused { color: var(--muted); font-size: clamp(12px, 1.4vw, 18px); margin-top: 1em; }
+
+  /* Painel de espera */
+  #idle { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 2.5vh; padding: 3vh 3vw; }
+  #idle header { display: flex; align-items: flex-end; justify-content: space-between; gap: 2vw; }
+  #clock { font-size: clamp(40px, 8vw, 110px); font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; }
+  #date { color: var(--muted); font-size: clamp(14px, 1.8vw, 22px); margin-top: .3em; text-transform: capitalize; }
+  .chips { display: flex; gap: .6em; flex-wrap: wrap; justify-content: flex-end; }
+  .chip { background: var(--panel); border-radius: 999px; padding: .35em .9em; font-size: clamp(12px, 1.3vw, 16px);
+    color: var(--muted); display: flex; align-items: center; gap: .45em; }
+  .chip::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: var(--muted); }
+  .chip.ok::before { background: var(--accent); }
+  .chip.warn::before { background: var(--warn); }
+  .content { display: grid; grid-template-columns: 1.1fr 1fr; gap: 3vw; min-height: 0; }
+  #mosaic { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 8px;
+    align-content: start; min-height: 0; }
+  #mosaic img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--bar); }
+  .side { display: flex; flex-direction: column; gap: 2.5vh; min-height: 0; overflow: hidden; }
+  .side h2 { font-size: clamp(13px, 1.4vw, 17px); font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .08em; margin: 0 0 .8em; }
+  #recent, #top { list-style: none; margin: 0; padding: 0; }
+  #recent li { display: grid; grid-template-columns: 44px 1fr auto; gap: .8em; align-items: center; padding: .35em 0; }
+  #recent img { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; background: var(--bar); }
+  .t { font-size: clamp(13px, 1.4vw, 17px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .a { font-size: clamp(12px, 1.2vw, 15px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .when { font-size: clamp(11px, 1.1vw, 14px); color: var(--muted); white-space: nowrap; }
+  #top li { display: flex; justify-content: space-between; padding: .3em 0; font-size: clamp(13px, 1.4vw, 17px); }
+  #top li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); font-size: clamp(13px, 1.4vw, 17px); }
+  #idle footer { color: var(--muted); font-size: clamp(11px, 1.1vw, 14px); display: flex; gap: 2em; flex-wrap: wrap;
+    border-top: 1px solid var(--bar); padding-top: 1.2vh; }
+
   @media (max-aspect-ratio: 1/1) {
-    main { flex-direction: column; text-align: center; }
+    #now { flex-direction: column; text-align: center; }
     #cover { width: min(80vw, 50vh); }
     #info { max-width: 90vw; }
+    .content { grid-template-columns: 1fr; }
+    #mosaic { grid-template-columns: repeat(6, 1fr); }
   }
 </style>
 </head>
 <body>
-<main>
-  <p id="message">Carregando…</p>
-  <img id="cover" class="hidden" alt="">
-  <div id="info" class="hidden">
+<section id="now" class="hidden">
+  <img id="cover" alt="">
+  <div id="info">
     <h1 id="title"></h1>
     <p id="artists"></p>
     <p id="album"></p>
     <div class="progress"><div id="bar"></div></div>
     <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+    <p id="paused" class="hidden">Pausado</p>
   </div>
-</main>
+</section>
+
+<section id="idle">
+  <header>
+    <div>
+      <div id="clock">--:--</div>
+      <div id="date"></div>
+    </div>
+    <div class="chips">
+      <span id="chip-spotify" class="chip">Spotify</span>
+      <span id="chip-server" class="chip">Servidor</span>
+    </div>
+  </header>
+  <div class="content">
+    <div id="mosaic"></div>
+    <div class="side">
+      <div>
+        <h2>Tocadas recentemente</h2>
+        <ul id="recent"></ul>
+      </div>
+      <div>
+        <h2>Mais ouvidos · 30 dias</h2>
+        <ol id="top"></ol>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span id="p-poll">Consulta ao Spotify: –</span>
+    <span>Microfone: fase 2</span>
+    <span id="p-total">Músicas registradas: –</span>
+    <span id="p-uptime">Servidor no ar desde –</span>
+  </footer>
+</section>
+
 <script>
 const $ = (id) => document.getElementById(id);
-let track = null;      // último estado vindo do servidor
-let fetchedAt = 0;     // quando esse estado chegou, para avançar a barra localmente
+const IDLE_AFTER_PAUSE_MS = 30000;  // pausado por mais que isso → painel de espera
+
+let track = null;       // último estado vindo do servidor
+let fetchedAt = 0;      // quando chegou, para avançar a barra localmente
+let pausedSince = null;
 
 function fmt(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function showMessage(text) {
-  $("message").textContent = text;
-  $("message").classList.remove("hidden");
-  $("cover").classList.add("hidden");
-  $("info").classList.add("hidden");
+function ago(iso) {
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  if (min < 24 * 60) return `há ${Math.round(min / 60)} h`;
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
-function render() {
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function show(view) {
+  $("now").classList.toggle("hidden", view !== "now");
+  $("idle").classList.toggle("hidden", view !== "idle");
+}
+
+/* ---------- Tocando agora ---------- */
+
+function renderProgress() {
   if (!track || !track.title) return;
   const progress = track.playing
     ? Math.min(track.duration_ms, track.progress_ms + (Date.now() - fetchedAt))
@@ -67,32 +154,110 @@ function render() {
   $("elapsed").textContent = fmt(progress);
 }
 
-async function poll() {
+async function pollNow() {
+  let data;
   try {
     const res = await fetch("/api/now-playing");
-    const data = await res.json();
-    if (!res.ok) { showMessage("Erro ao falar com o Spotify"); return; }
-    if (!data.authorized) { showMessage("Spotify não conectado"); track = null; return; }
-    if (!data.title) { showMessage("Nada tocando agora"); track = null; return; }
-    if (!track || track.cover !== data.cover) $("cover").src = data.cover || "";
-    $("title").textContent = data.title;
-    $("artists").textContent = data.artists.join(", ");
-    $("album").textContent = data.release_date ? `${data.album} · ${data.release_date.slice(0, 4)}` : data.album;
-    $("duration").textContent = fmt(data.duration_ms);
-    $("message").classList.add("hidden");
-    $("cover").classList.remove("hidden");
-    $("info").classList.remove("hidden");
-    track = data;
-    fetchedAt = Date.now();
-    render();
+    data = await res.json();
   } catch {
-    showMessage("Servidor indisponível");
+    setChip("chip-server", "warn", "Servidor indisponível");
+    show("idle");
+    return;
+  }
+  setChip("chip-server", "ok", "Servidor");
+
+  if (!data.title) { track = null; pausedSince = null; show("idle"); return; }
+
+  if (data.playing) pausedSince = null;
+  else if (pausedSince === null) pausedSince = Date.now();
+
+  if (!track || track.cover !== data.cover) $("cover").src = data.cover || "";
+  $("title").textContent = data.title;
+  $("artists").textContent = data.artists.join(", ");
+  $("album").textContent = data.release_date ? `${data.album} · ${data.release_date.slice(0, 4)}` : data.album;
+  $("duration").textContent = fmt(data.duration_ms);
+  $("paused").classList.toggle("hidden", data.playing);
+  track = data;
+  fetchedAt = Date.now();
+  renderProgress();
+
+  const idle = pausedSince !== null && Date.now() - pausedSince > IDLE_AFTER_PAUSE_MS;
+  show(idle ? "idle" : "now");
+}
+
+/* ---------- Painel de espera ---------- */
+
+function setChip(id, cls, text) {
+  const c = $(id);
+  c.className = `chip ${cls}`;
+  c.textContent = text;
+}
+
+function tickClock() {
+  const d = new Date();
+  $("clock").textContent = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  $("date").textContent = d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+async function refreshPanel() {
+  try {
+    const [history, stats, status] = await Promise.all([
+      fetch("/api/history?limit=60").then((r) => r.json()),
+      fetch("/api/stats").then((r) => r.json()),
+      fetch("/api/status").then((r) => r.json()),
+    ]);
+
+    // Mosaico: capas distintas mais recentes
+    const mosaic = $("mosaic");
+    mosaic.replaceChildren();
+    const covers = [...new Set(history.map((h) => h.cover).filter(Boolean))].slice(0, 16);
+    for (const src of covers) { const img = el("img"); img.src = src; img.alt = ""; mosaic.append(img); }
+    if (!covers.length) mosaic.append(el("p", "empty", "As capas aparecem aqui conforme você ouve músicas."));
+
+    // Lista das últimas músicas
+    const recent = $("recent");
+    recent.replaceChildren();
+    for (const h of history.slice(0, 7)) {
+      const li = el("li");
+      const img = el("img"); img.src = h.cover || ""; img.alt = "";
+      const text = el("div");
+      text.style.minWidth = "0";
+      text.append(el("div", "t", h.title), el("div", "a", h.artists));
+      li.append(img, text, el("span", "when", ago(h.played_at)));
+      recent.append(li);
+    }
+    if (!history.length) recent.append(el("li", "empty", "Nenhuma música registrada ainda."));
+
+    // Mais ouvidos
+    const top = $("top");
+    top.replaceChildren();
+    for (const t of stats.top_artists) {
+      const li = el("li");
+      li.append(el("span", "", t.artists), el("span", "", `${t.plays}×`));
+      top.append(li);
+    }
+    if (!stats.top_artists.length) top.append(el("li", "empty", "Sem dados ainda."));
+
+    // Estado e parâmetros
+    if (!status.spotify_authorized) setChip("chip-spotify", "warn", "Spotify não conectado");
+    else if (status.last_error) setChip("chip-spotify", "warn", `Spotify: ${status.last_error}`);
+    else setChip("chip-spotify", "ok", "Spotify");
+    $("p-poll").textContent = `Consulta ao Spotify: a cada ${status.poll_seconds} s`;
+    $("p-total").textContent = `Músicas registradas: ${stats.total_plays}`;
+    $("p-uptime").textContent = `Servidor no ar desde ${new Date(status.started_at * 1000)
+      .toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+  } catch {
+    setChip("chip-server", "warn", "Servidor indisponível");
   }
 }
 
-poll();
-setInterval(poll, 3000);
-setInterval(render, 500);
+tickClock();
+pollNow();
+refreshPanel();
+setInterval(tickClock, 1000);
+setInterval(pollNow, 3000);
+setInterval(renderProgress, 500);
+setInterval(refreshPanel, 30000);
 </script>
 </body>
 </html>

@@ -104,6 +104,7 @@ def now_playing() -> dict:
         "authorized": True,
         "playing": data.get("is_playing", False),
         "source": "spotify",
+        "id": item.get("id"),
         "title": item["name"],
         "artists": [a["name"] for a in item["artists"]],
         "album": item["album"]["name"],
