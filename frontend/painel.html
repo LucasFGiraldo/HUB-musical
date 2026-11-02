@@ -55,7 +55,7 @@
   @keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
   h2 { font-size: 15px; font-weight: 600; margin: 34px 0 12px; color: var(--muted); }
-  h2:first-child { margin-top: 0; }
+  section > h2:first-child { margin-top: 0; }
   .muted { color: var(--muted); }
   .glyph { width: 20px; height: 20px; flex: none; }
   .spotify { color: var(--spotify); } .mic { color: var(--rust); }
@@ -88,9 +88,9 @@
   .seg { display: inline-flex; background: var(--sunk); border-radius: 10px; padding: 3px; }
   .seg button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; color: var(--muted); }
   .seg button[aria-pressed="true"] { background: var(--raise); color: var(--ink); }
-  .figures { display: flex; flex-wrap: wrap; gap: 28px; margin: 22px 0 6px; }
-  .figure .n { font-size: 40px; font-weight: 300; font-stretch: 85%; line-height: 1; font-variant-numeric: tabular-nums; }
-  .figure .l { display: flex; align-items: center; gap: 6px; color: var(--muted); margin-top: 6px; }
+  .figures { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 28px; margin: 22px 0 6px; }
+  .figure .n { font-size: clamp(30px, 8vw, 44px); font-weight: 300; font-stretch: 85%; line-height: 1; font-variant-numeric: tabular-nums; }
+  .figure .l { display: flex; align-items: center; gap: 6px; color: var(--muted); margin-top: 6px; font-size: 14px; }
   .figure .l svg { width: 16px; height: 16px; }
 
   .chart { position: relative; margin-top: 8px; }
