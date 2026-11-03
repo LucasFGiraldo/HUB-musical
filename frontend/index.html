@@ -207,6 +207,25 @@
     margin-top: 1.2vmin; font-size: clamp(11px, 1.7vmin, 21px); font-weight: 420; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  /* Marcações sobre a capa (lendo / lido / favorito), como adesivos no canto */
+  #books .cover { position: relative; }
+  #books .marks { position: absolute; top: 1vmin; right: 1vmin; display: flex; gap: .7vmin; }
+  #books .marks svg {
+    width: clamp(18px, 3.4vmin, 40px); height: clamp(18px, 3.4vmin, 40px); padding: .75vmin; box-sizing: border-box;
+    border-radius: 50%; background: var(--veil); color: var(--ink);
+    -webkit-backdrop-filter: blur(1vmin); backdrop-filter: blur(1vmin); box-shadow: 0 .4vmin 1.2vmin -.4vmin var(--shadow);
+  }
+  #books .marks .reading, #books .marks .favorite { color: var(--rust); }
+  #p-books { grid-template-rows: auto auto; align-content: center; }
+  #pages-read {
+    margin-top: 6vmin; text-align: center; color: var(--muted);
+    font-size: clamp(13px, 2.2vmin, 26px); font-weight: 380; font-variant-numeric: tabular-nums;
+  }
+  #pages-read b {
+    margin-right: 1.2vmin; color: var(--ink);
+    font-size: clamp(22px, 5.2vmin, 64px); font-weight: 250; font-stretch: 80%; letter-spacing: .01em;
+  }
+  #pages-read.hidden { display: none; }
 
   #empty { width: 13vmin; height: 13vmin; color: var(--muted); opacity: .45; }
   #empty.hidden { display: none; }
@@ -292,6 +311,15 @@
     </g>
     <circle cx="12" cy="12" r=".9" fill="currentColor"/>
   </symbol>
+  <symbol id="i-reading" viewBox="0 0 24 24">
+    <path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5Zm0 0v13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="i-read" viewBox="0 0 24 24">
+    <path d="m4.5 12.5 4.8 4.8L19.5 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="i-favorite" viewBox="0 0 24 24">
+    <path d="M12 20.5S3 15 3 8.9A4.6 4.6 0 0 1 12 6.6a4.6 4.6 0 0 1 9 2.3c0 6.1-9 11.6-9 11.6Z" fill="currentColor"/>
+  </symbol>
 </svg>
 
 <div class="halo" id="halo0"></div>
@@ -324,7 +352,10 @@
       <div id="recent"></div>
       <svg id="empty" class="hidden"><use href="#i-vinyl"/></svg>
     </div>
-    <div class="page" id="p-books"><div id="books"></div></div>
+    <div class="page" id="p-books">
+      <div id="books"></div>
+      <div id="pages-read" class="hidden"><b></b><span></span></div>
+    </div>
   </div>
   <div id="status">
     <svg id="st-spotify" class="g"><use href="#i-spotify"/></svg>
@@ -554,14 +585,29 @@ let booksKey = null, booksOn = true, rotateMs = 10000, rotateTimer, page = "musi
 
 function renderBooks(data) {
   const items = [...data.reading, ...data.read].filter((b) => b.cover);
-  const key = items.map((b) => `${b.id}:${b.progress ?? ""}`).join("|");
+  const total = data.pages_read || 0;
+  const key = items.map((b) => `${b.id}:${b.progress ?? ""}:${b.status}:${b.favorite}`).join("|") + `#${total}`;
   if (key === booksKey) return;
   booksKey = key;
+  $("pages-read").classList.toggle("hidden", !total);
+  $("pages-read").querySelector("b").textContent = total.toLocaleString("pt-BR");
+  $("pages-read").querySelector("span").textContent = total === 1 ? "página lida" : "páginas lidas";
   $("books").replaceChildren(...items.map((b, i) => {
     const fig = document.createElement("figure");
     fig.style.setProperty("--i", i);
+    const cover = document.createElement("div"); cover.className = "cover";
     const img = document.createElement("img"); img.src = b.cover; img.alt = "";
-    fig.append(img);
+    const marks = document.createElement("div"); marks.className = "marks";
+    const kinds = [b.reading ? "reading" : b.status === "read" ? "read" : null, b.favorite ? "favorite" : null];
+    for (const kind of kinds.filter(Boolean)) {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add(kind);
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", `#i-${kind}`);
+      svg.append(use); marks.append(svg);
+    }
+    cover.append(img, marks);
+    fig.append(cover);
     // A barra de progresso só aparece em "lendo"; nos lidos fica invisível para alinhar as capas
     const track = document.createElement("div"); track.className = "track";
     const fill = document.createElement("i"); fill.style.width = `${Math.round((b.progress || 0) * 100)}%`;

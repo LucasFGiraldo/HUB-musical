@@ -221,9 +221,14 @@ def snapshot() -> dict:
             " AND b.status NOT IN ('reading', 'rereading')"
             " GROUP BY b.id ORDER BY MAX(COALESCE(r.finished_on, '')) DESC, MAX(r.id) DESC LIMIT ?",
             (max(0, left),)).fetchall()
+        # Páginas lidas: soma das páginas dos livros lidos (relendo também já foi lido)
+        pages_read = conn.execute(
+            "SELECT COALESCE(SUM(pages), 0) FROM books WHERE status IN ('read', 'rereading')").fetchone()[0]
     item = lambda r, now: {"id": r["id"], "title": r["title"], "cover": _cover(r), "reading": now,
+                           "status": r["status"], "favorite": bool(r["favorite"]),
                            "progress": round(min(1, r["page"] / r["pages"]), 3) if now and r["pages"] else None}
-    return {"reading": [item(r, True) for r in reading], "read": [item(r, False) for r in read]}
+    return {"reading": [item(r, True) for r in reading], "read": [item(r, False) for r in read],
+            "pages_read": pages_read}
 
 
 def _pace(conn) -> float:
