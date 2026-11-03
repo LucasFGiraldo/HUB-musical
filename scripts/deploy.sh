@@ -12,7 +12,8 @@ git archive HEAD | ssh -i "$KEY" -o BatchMode=yes "$HOST" '
   tar -x -C ~/hub-musical
   cd ~/hub-musical
   .venv/bin/pip install -q -r backend/requirements.txt
-  chmod 750 ~/hub-musical; mkdir -p data; chmod 700 data; chmod 600 data/* .env 2>/dev/null || true
+  chmod 750 ~/hub-musical; mkdir -p data; chmod 700 data
+  find data -type d -exec chmod 700 {} +; find data -type f -exec chmod 600 {} +; chmod 600 .env 2>/dev/null || true
   mkdir -p ~/.config/systemd/user
   cp deploy/hub-musical.service ~/.config/systemd/user/
   systemctl --user daemon-reload
