@@ -250,6 +250,15 @@ def library(days: int) -> dict:
         per_day = {r["day"]: r["n"] for r in conn.execute(
             "SELECT day, SUM(pages_read) AS n FROM book_progress WHERE day >= ? GROUP BY day", (since,))}
         finished = conn.execute("SELECT COUNT(*) FROM book_reads WHERE finished_on >= ?", (since,)).fetchone()[0]
+        # Livros terminados por mês, nos últimos 12 meses
+        months = []
+        y, m = today.year, today.month
+        for _ in range(12):
+            months.insert(0, f"{y:04d}-{m:02d}")
+            y, m = (y, m - 1) if m > 1 else (y - 1, 12)
+        per_month = {r["m"]: r["n"] for r in conn.execute(
+            "SELECT substr(finished_on, 1, 7) AS m, COUNT(*) AS n FROM book_reads WHERE finished_on >= ? GROUP BY m",
+            (months[0] + "-01",))}
         recent = conn.execute(
             "SELECT r.finished_on, r.rating, b.id, b.title, b.authors, b.cover FROM book_reads r JOIN books b ON b.id = r.book_id"
             " ORDER BY COALESCE(r.finished_on, '') DESC, r.id DESC LIMIT 20").fetchall()
@@ -263,6 +272,7 @@ def library(days: int) -> dict:
         "period_finished": finished, "period_pages": sum(per_day.values()),
         "pace": round(pace, 1),
         "per_day": [{"day": d, "pages": per_day.get(d, 0)} for d in days_list],
+        "per_month": [{"month": mo, "books": per_month.get(mo, 0)} for mo in months],
         "recent_read": [{"id": r["id"], "title": r["title"], "authors": r["authors"], "finished": r["finished_on"],
                          "rating": r["rating"], "cover_url": _cover(r)} for r in recent],
     }

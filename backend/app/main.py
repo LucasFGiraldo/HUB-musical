@@ -11,14 +11,14 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTe
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import auth, catalog, config, db, listener, lyrics, poller, settings, shelf, spotify
+from . import auth, catalog, config, db, listener, lyrics, poller, presence, settings, shelf, spotify
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
     shelf.init()
-    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(listener.run())]
+    tasks = [asyncio.create_task(t) for t in (poller.run(), poller.run_history(), presence.run(), listener.run())]
     yield
     for task in tasks:
         task.cancel()
@@ -163,6 +163,29 @@ def devices():
     return {"current": current, "seen": seen}
 
 
+@app.post("/api/presence")
+async def presence_here(request: Request):
+    """Chamado pelo atalho do iPhone ao entrar no Wi-Fi de casa: "cheguei"."""
+    client = request.client.host if request.client else ""
+    if not client or not ipaddress.ip_address(client).is_private or ipaddress.ip_address(client).is_loopback:
+        raise HTTPException(400, "Chame pelo Wi-Fi de casa")
+    try:
+        status = await asyncio.to_thread(presence.learn, client)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))
+    except PermissionError as exc:
+        raise HTTPException(409, f"{exc}; esqueça o aparelho antigo no painel (Ajustes)")
+    presence.arrived.set()  # traz na hora o que tocou fora de casa
+    return status
+
+
+@app.delete("/api/presence")
+def presence_forget(request: Request):
+    _require_pin(request)
+    presence.forget()
+    return presence.status()
+
+
 @app.get("/api/status")
 def status():
     s = poller.state
@@ -173,6 +196,9 @@ def status():
         "started_at": s["started_at"],
         "poll_seconds": s["poll_seconds"],
         "spotify_blocked_until": s["blocked_until"],
+        "history_ok": s["history_ok"],
+        "history_error": s["history_error"],
+        "presence": presence.status(),
         "mic": listener.status,
         "spotify_device": s["device"],
     }

@@ -15,7 +15,8 @@ from . import config
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API_URL = "https://api.spotify.com/v1"
-SCOPES = "user-read-currently-playing user-read-playback-state"
+SCOPES = "user-read-currently-playing user-read-playback-state user-read-recently-played"
+HISTORY_SCOPE = "user-read-recently-played"
 TOKEN_FILE = config.DATA_DIR / "spotify_tokens.json"
 
 # Conexão reaproveitada (keep-alive): evita um handshake TLS a cada consulta
@@ -91,6 +92,39 @@ def _access_token() -> str | None:
         new.setdefault("refresh_token", tokens["refresh_token"])
         tokens = _save(new)
     return tokens["access_token"]
+
+
+def has_history_scope() -> bool:
+    """O login antigo não tinha a permissão do histórico; nesse caso é preciso refazer o login."""
+    tokens = _load()
+    return bool(tokens) and HISTORY_SCOPE in tokens.get("scope", "").split()
+
+
+def recently_played() -> list[dict]:
+    """Últimas faixas tocadas em qualquer aparelho (até 50, só as ouvidas por mais de 30 s), da mais antiga à mais nova."""
+    token = _access_token()
+    if token is None:
+        return []
+    resp = _client.get(f"{API_URL}/me/player/recently-played", params={"limit": 50},
+                       headers={"Authorization": f"Bearer {token}"})
+    resp.raise_for_status()
+    out = []
+    for it in resp.json().get("items", []):
+        item = it.get("track") or {}
+        if item.get("type") != "track":
+            continue
+        images = item["album"]["images"]
+        out.append({
+            "played_at": it["played_at"],
+            "source": "spotify",
+            "id": item.get("id"),
+            "title": item["name"],
+            "artists": [a["name"] for a in item["artists"]],
+            "album": item["album"]["name"],
+            "cover": images[0]["url"] if images else None,
+            "duration_ms": item["duration_ms"],
+        })
+    return out[::-1]
 
 
 def now_playing() -> dict:

@@ -130,6 +130,17 @@
   .history .side { text-align: right; font-size: 13px; color: var(--muted); display: grid; justify-items: end; gap: 4px; }
   .history .side svg { width: 16px; height: 16px; }
   .empty-note { color: var(--muted); padding: 12px 0; }
+  /* Spotify × microfone: uma barra dividida, com legenda (a cor nunca é a única pista) */
+  .split { display: flex; gap: 2px; height: 10px; margin-top: 18px; border-radius: 99px; overflow: hidden; background: var(--sunk); }
+  .split i { display: block; height: 100%; transition: width .6s var(--ease); }
+  .split .spotify { background: var(--spotify); }
+  .split .mic { background: var(--rust); }
+  .split-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .split-legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+  .split-legend .spotify::before { background: var(--spotify); }
+  .split-legend .mic::before { background: var(--rust); }
+  /* Listas longas: só as primeiras linhas, com "Ver mais" */
+  .history.short li:nth-child(n+6) { display: none; }
 
   /* Livros: capa em pé; a barra ferrugem é o progresso de leitura (a mesma cor da tela) */
   .reading { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; border-radius: 14px; overflow: hidden; }
@@ -320,6 +331,7 @@
     <h2>Estado</h2>
     <div class="rows">
       <div class="row"><span class="dot" id="st-spotify"></span><span class="what">Spotify</span><span class="val" id="v-spotify">—</span></div>
+      <div class="row"><span class="dot" id="st-home"></span><span class="what">iPhone</span><span class="val" id="v-home">—</span></div>
       <div class="row"><span class="dot" id="st-mic"></span><span class="what">Microfone</span><span class="val" id="v-mic">—</span></div>
       <div class="meter-wrap">
         <div class="meter" id="meter-agora"><div class="fill"></div><div class="mark"></div></div>
@@ -343,6 +355,8 @@
       <div class="figure"><div class="n" id="f-spotify">—</div><div class="l"><svg class="spotify"><use href="#i-spotify"/></svg>pelo Spotify</div></div>
       <div class="figure"><div class="n" id="f-mic">—</div><div class="l"><svg class="mic"><use href="#i-mic"/></svg>pelo microfone</div></div>
     </div>
+    <div class="split" id="split" role="img" aria-label=""><i class="spotify"></i><i class="mic"></i></div>
+    <div class="split-legend" id="split-legend"></div>
 
     <h2>Músicas por dia</h2>
     <div class="chart" id="chart">
@@ -352,13 +366,21 @@
     </div>
     <details><summary>Ver como tabela</summary><table id="table"></table></details>
 
+    <h2>Horário em que você mais ouve</h2>
+    <div class="chart" id="chart-hours">
+      <div class="plot" id="plot-hours" aria-hidden="true"></div>
+      <div class="xlabels" id="xlabels-hours"></div>
+      <div class="tip" id="tip-hours"></div>
+    </div>
+
     <div class="cols">
       <div><h2>Artistas mais ouvidos</h2><ol class="rank" id="artists"></ol></div>
       <div><h2>Músicas mais ouvidas</h2><ol class="rank songs" id="songs"></ol></div>
     </div>
 
     <h2>Histórico</h2>
-    <ul class="history" id="history"></ul>
+    <ul class="history short" id="history"></ul>
+    <button type="button" class="linkbtn more" data-list="history" hidden>Ver mais</button>
 
     <h2>Leituras</h2>
     <div class="figures">
@@ -366,7 +388,17 @@
       <div class="figure"><div class="n" id="f-books-pages">—</div><div class="l">páginas lidas</div></div>
       <div class="figure"><div class="n" id="f-books-pace">—</div><div class="l">páginas por dia (últimos 14 dias)</div></div>
     </div>
+    <h2>Estante</h2>
+    <ol class="rank" id="shelf-status"></ol>
     <p class="muted" id="shelf-summary"></p>
+
+    <h2>Livros terminados por mês</h2>
+    <div class="chart" id="chart-months">
+      <div class="plot" id="plot-months" aria-hidden="true"></div>
+      <div class="xlabels" id="xlabels-months"></div>
+      <div class="tip" id="tip-months"></div>
+    </div>
+    <p class="muted" id="months-note" hidden>Nenhum livro com data de término nos últimos 12 meses. Preencha a data na ficha do livro para ele aparecer aqui.</p>
 
     <h2>Páginas por dia</h2>
     <div class="chart" id="chart-pages">
@@ -377,7 +409,8 @@
     <details><summary>Ver como tabela</summary><table id="table-pages"></table></details>
 
     <h2>Últimos livros lidos</h2>
-    <ul class="history books" id="read-list"></ul>
+    <ul class="history books short" id="read-list"></ul>
+    <button type="button" class="linkbtn more" data-list="read-list" hidden>Ver mais</button>
   </section>
 
   <!-- ================= Leituras ================= -->
@@ -496,6 +529,16 @@
           <div class="help">O que tocar nos aparelhos marcados não aparece na tela nem entra no histórico.</div>
           <div class="chips" id="devices"></div>
         </div>
+        <div class="field wide">
+          <label>Aparelhos que saem de casa</label>
+          <div class="help">Com o iPhone fora de casa, o que tocar nos marcados (e em qualquer celular) não aparece ao vivo na tela; entra só no histórico.</div>
+          <div class="chips" id="portable"></div>
+        </div>
+        <div class="field wide">
+          <span class="label">iPhone na rede de casa</span>
+          <div class="help" id="presence-help">—</div>
+          <button type="button" class="linkbtn" id="presence-forget" hidden>Esquecer este iPhone</button>
+        </div>
       </div>
 
       <button type="button" class="linkbtn" id="reset">Restaurar os valores padrão</button>
@@ -605,6 +648,7 @@ let saved = null;      // ajustes como estão no servidor
 let defaults = null;
 let threshold = 0.25;  // usado pelos medidores
 let ignored = new Set();
+let portable = new Set();
 
 /* ---------- Tema (mesmos horários da tela) ---------- */
 function applyTheme() {
@@ -665,7 +709,9 @@ async function pollStatus() {
   const ok = s.spotify_authorized && !s.last_error;
   $("st-spotify").className = `dot ${ok ? "ok" : "bad"}`;
   $("v-spotify").textContent = !s.spotify_authorized ? "Não conectado"
-    : s.last_error ? s.last_error : (s.spotify_device ? `Conectado · ${s.spotify_device}` : "Conectado");
+    : s.last_error ? s.last_error : s.history_error ? `Conectado · ${s.history_error}`
+    : (s.spotify_device ? `Conectado · ${s.spotify_device}` : "Conectado");
+  renderPresence(s.presence);
   const mic = s.mic;
   $("st-mic").className = `dot ${mic.error ? "bad" : mic.state === "desligado" ? "" : "ok"}`;
   $("v-mic").textContent = mic.error ? mic.error
@@ -678,6 +724,49 @@ async function pollStatus() {
   setMeter("meter-agora", score);
   setMeter("meter-ajustes", score);
 }
+
+const ago = (ts) => {
+  const min = Math.round((Date.now() / 1000 - ts) / 60);
+  return min < 1 ? "agora" : min < 60 ? `há ${min} min` : `há ${Math.round(min / 60)} h`;
+};
+function renderPresence(p) {
+  const text = !p.configured ? "Não configurado (rode o atalho do iPhone)"
+    : `${p.home ? "Em casa" : "Fora de casa"}${p.last_seen ? ` · visto ${ago(p.last_seen)}` : ""}`;
+  $("st-home").className = `dot ${p.configured && p.home ? "ok" : ""}`;
+  $("v-home").textContent = text;
+  $("presence-help").textContent = p.configured
+    ? `${text}. Fora de casa, o celular só entra no histórico.`
+    : "Ainda não configurado: crie o atalho no iPhone (veja o README). Até lá, tudo aparece ao vivo na tela.";
+  $("presence-forget").hidden = !p.configured;
+}
+$("presence-forget").addEventListener("click", async () => {
+  if (!confirm("Esquecer este iPhone? Rode o atalho de novo para registrar outro.")) return;
+  try { await api("DELETE", "/api/presence"); pollStatus(); } catch (e) { alert(e.message); }
+});
+
+/* Listas longas mostram só as primeiras linhas; "Ver mais" abre o resto */
+document.querySelectorAll(".linkbtn.more").forEach((b) => b.addEventListener("click", () => {
+  const list = $(b.dataset.list);
+  const open = list.classList.toggle("short") === false;
+  b.textContent = open ? "Ver menos" : "Ver mais";
+}));
+function updateMore(id) {
+  const list = $(id), btn = document.querySelector(`.linkbtn.more[data-list="${id}"]`);
+  btn.hidden = list.children.length <= 5;
+  list.classList.add("short"); btn.textContent = "Ver mais";
+}
+
+/* Gráfico de colunas (dia, hora, mês), com dica ao passar o dedo/mouse */
+function columns(plotId, items, value, tip) {
+  const max = Math.max(1, ...items.map(value));
+  const plot = $(plotId); plot.replaceChildren();
+  for (const it of items) {
+    const b = el("div", "b"); const s = el("span");
+    s.style.height = `${(value(it) / max) * 100}%`;
+    b.append(s); b.dataset.tip = tip(it); plot.append(b);
+  }
+}
+function xlabels(id, labels) { const xl = $(id); xl.replaceChildren(...labels.map((t) => el("span", "", t))); }
 
 /* ---------- Estatísticas ---------- */
 let days = 30;
@@ -701,19 +790,23 @@ async function loadStats() {
   $("f-spotify").textContent = st.by_source.spotify;
   $("f-mic").textContent = st.by_source.mic;
 
-  // Barras por dia
-  const max = Math.max(1, ...st.per_day.map((d) => d.plays));
-  const plot = $("plot"); plot.replaceChildren();
-  for (const d of st.per_day) {
-    const b = el("div", "b"); const s = el("span");
-    s.style.height = `${(d.plays / max) * 100}%`;
-    b.append(s);
-    b.dataset.tip = `${dayLabel(d.day)} · ${d.plays} ${d.plays === 1 ? "música" : "músicas"}`;
-    plot.append(b);
-  }
-  const xl = $("xlabels"); xl.replaceChildren();
+  // Spotify × microfone
+  const { spotify: sp, mic } = st.by_source, sum = sp + mic;
+  const pct = (n) => (sum ? Math.round((n / sum) * 100) : 0);
+  $("split").querySelector(".spotify").style.width = `${sum ? (sp / sum) * 100 : 0}%`;
+  $("split").querySelector(".mic").style.width = `${sum ? (mic / sum) * 100 : 0}%`;
+  $("split").setAttribute("aria-label", `Spotify ${pct(sp)}%, microfone ${pct(mic)}%`);
+  $("split-legend").replaceChildren(el("span", "spotify", `Spotify ${pct(sp)}%`), el("span", "mic", `Microfone ${pct(mic)}%`));
+
+  // Colunas por dia
+  const plural = (n) => `${n} ${n === 1 ? "música" : "músicas"}`;
+  columns("plot", st.per_day, (d) => d.plays, (d) => `${dayLabel(d.day)} · ${plural(d.plays)}`);
   const first = st.per_day[0], mid = st.per_day[Math.floor(st.per_day.length / 2)], last = st.per_day.at(-1);
-  for (const d of [first, mid, last]) xl.append(el("span", "", d.day === last.day ? "hoje" : dayLabel(d.day)));
+  xlabels("xlabels", [first, mid, last].map((d) => (d.day === last.day ? "hoje" : dayLabel(d.day))));
+
+  // Colunas por hora do dia
+  columns("plot-hours", st.per_hour, (h) => h.plays, (h) => `${h.hour}h–${h.hour + 1}h · ${plural(h.plays)}`);
+  xlabels("xlabels-hours", ["0h", "6h", "12h", "18h", "23h"]);
   const table = $("table"); table.replaceChildren();
   for (const d of [...st.per_day].reverse()) {
     if (!d.plays) continue;
@@ -756,6 +849,7 @@ async function loadStats() {
     li.append(img, main, side);
     ul.append(li);
   }
+  updateMore("history");
 }
 
 /* ---------- Leituras ---------- */
@@ -862,21 +956,32 @@ async function loadLibrary() {
   $("f-books-read").textContent = lib.period_finished;
   $("f-books-pages").textContent = lib.period_pages.toLocaleString("pt-BR");
   $("f-books-pace").textContent = String(lib.pace).replace(".", ",");
-  $("shelf-summary").textContent = lib.total
-    ? `${lib.total} ${lib.total === 1 ? "livro" : "livros"} na estante · ${lib.counts.read} ${lib.counts.read === 1 ? "lido" : "lidos"} ·${lib.counts.want} na fila · ${lib.owned} que você tem`
-    : "A estante ainda está vazia. Adicione livros na aba Leituras.";
-  const max = Math.max(1, ...lib.per_day.map((d) => d.pages));
-  const plot = $("plot-pages"); plot.replaceChildren();
-  for (const d of lib.per_day) {
-    const b = el("div", "b"); const s = el("span");
-    s.style.height = `${(d.pages / max) * 100}%`;
-    b.append(s);
-    b.dataset.tip = `${dayLabel(d.day)} · ${d.pages} ${d.pages === 1 ? "página" : "páginas"}`;
-    plot.append(b);
+  // Estante por situação (barras, maior primeiro; situações vazias ficam de fora)
+  const st = $("shelf-status"); st.replaceChildren();
+  const byStatus = STATUS.map(([k, n]) => [n, lib.counts[k] || 0]).filter(([, c]) => c).sort((a, b) => b[1] - a[1]);
+  if (!byStatus.length) st.append(el("li", "empty-note", "A estante ainda está vazia. Adicione livros na aba Leituras."));
+  for (const [name, count] of byStatus) {
+    const li = el("li");
+    const track = el("div", "track"); const bar = el("i"); bar.style.width = `${(count / byStatus[0][1]) * 100}%`; track.append(bar);
+    li.append(el("span", "name", name), el("span", "count", count), track);
+    st.append(li);
   }
-  const xl = $("xlabels-pages"); xl.replaceChildren();
+  $("shelf-summary").textContent = lib.total
+    ? `${lib.total} ${lib.total === 1 ? "livro" : "livros"} na estante · ${lib.owned} que você tem`
+    : "";
+
+  // Livros terminados por mês (12 meses)
+  const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const monthName = (ym) => { const [y, m] = ym.split("-"); return `${MONTHS[Number(m) - 1]}/${y.slice(2)}`; };
+  columns("plot-months", lib.per_month, (m) => m.books,
+    (m) => `${monthName(m.month)} · ${m.books} ${m.books === 1 ? "livro" : "livros"}`);
+  const pm = lib.per_month;
+  xlabels("xlabels-months", [pm[0], pm[6], pm[11]].map((m) => monthName(m.month)));
+  $("months-note").hidden = pm.some((m) => m.books);
+
   const pd = lib.per_day, last = pd.at(-1);
-  for (const d of [pd[0], pd[Math.floor(pd.length / 2)], last]) xl.append(el("span", "", d.day === last.day ? "hoje" : dayLabel(d.day)));
+  columns("plot-pages", pd, (d) => d.pages, (d) => `${dayLabel(d.day)} · ${d.pages} ${d.pages === 1 ? "página" : "páginas"}`);
+  xlabels("xlabels-pages", [pd[0], pd[Math.floor(pd.length / 2)], last].map((d) => (d.day === last.day ? "hoje" : dayLabel(d.day))));
   const table = $("table-pages"); table.replaceChildren();
   for (const d of [...pd].reverse()) {
     if (!d.pages) continue;
@@ -893,6 +998,7 @@ async function loadLibrary() {
     li.append(coverImg(b.cover_url), main, side);
     list.append(li);
   }
+  updateMore("read-list");
   loadShelf();
 }
 
@@ -1152,6 +1258,8 @@ function tooltip(chartId, plotId, tipId) {
 }
 tooltip("chart", "plot", "tip");
 tooltip("chart-pages", "plot-pages", "tip-pages");
+tooltip("chart-hours", "plot-hours", "tip-hours");
+tooltip("chart-months", "plot-months", "tip-months");
 
 /* ---------- Ajustes ---------- */
 const form = $("form");
@@ -1167,6 +1275,7 @@ function fillForm(s) {
   $("night_from").value = s.night_from;
   $("day_from").value = s.day_from;
   ignored = new Set(s.ignored_devices.map((d) => d.toLowerCase()));
+  portable = new Set(s.portable_devices.map((d) => d.toLowerCase()));
   renderDevices();
   onThreshold();
   clearErrors();
@@ -1183,6 +1292,7 @@ function readForm() {
     night_from: $("night_from").value,
     day_from: $("day_from").value,
     ignored_devices: knownDevices.filter((d) => ignored.has(d.toLowerCase())),
+    portable_devices: knownDevices.filter((d) => portable.has(d.toLowerCase())),
   };
   for (const k of NUM) v[k] = $(k).value === "" ? null : Number($(k).value);
   return v;
@@ -1199,29 +1309,32 @@ let knownDevices = [];
 async function loadDevices() {
   try { const d = await fetch("/api/devices").then((r) => r.json()); knownDevices = d.seen; } catch { knownDevices = []; }
   // aparelhos já ignorados que ainda não apareceram no histórico
-  for (const d of saved ? saved.ignored_devices : []) if (!knownDevices.some((k) => k.toLowerCase() === d.toLowerCase())) knownDevices.push(d);
+  for (const d of saved ? [...saved.ignored_devices, ...saved.portable_devices] : []) if (!knownDevices.some((k) => k.toLowerCase() === d.toLowerCase())) knownDevices.push(d);
   renderDevices();
 }
 function renderDevices() {
-  const box = $("devices"); box.replaceChildren();
-  if (!knownDevices.length) { box.append(el("span", "muted", "Nenhum aparelho visto ainda. Toque algo no Spotify e volte aqui.")); return; }
-  for (const d of knownDevices) {
-    const b = el("button", "chip"); b.type = "button";
-    const on = ignored.has(d.toLowerCase());
-    b.setAttribute("aria-pressed", on);
-    b.append(el("span", "", d), el("small", "", on ? "ignorado" : "mostrar"));
-    b.addEventListener("click", () => {
-      if (ignored.has(d.toLowerCase())) ignored.delete(d.toLowerCase()); else ignored.add(d.toLowerCase());
-      renderDevices(); markDirty();
-    });
-    box.append(b);
+  for (const [id, set, on, off] of [["devices", ignored, "ignorado", "mostrar"], ["portable", portable, "sai de casa", "marcar"]]) {
+    const box = $(id); box.replaceChildren();
+    if (!knownDevices.length) { box.append(el("span", "muted", "Nenhum aparelho visto ainda. Toque algo no Spotify e volte aqui.")); continue; }
+    for (const d of knownDevices) {
+      const b = el("button", "chip"); b.type = "button";
+      const pressed = set.has(d.toLowerCase());
+      b.setAttribute("aria-pressed", pressed);
+      b.append(el("span", "", d), el("small", "", pressed ? on : off));
+      b.addEventListener("click", () => {
+        if (set.has(d.toLowerCase())) set.delete(d.toLowerCase()); else set.add(d.toLowerCase());
+        renderDevices(); markDirty();
+      });
+      box.append(b);
+    }
   }
 }
 
 function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function markDirty() {
   if (!saved) return;
-  const cur = readForm(), base = { ...saved, ignored_devices: knownDevices.filter((d) => saved.ignored_devices.some((x) => x.toLowerCase() === d.toLowerCase())) };
+  const norm = (list) => knownDevices.filter((d) => list.some((x) => x.toLowerCase() === d.toLowerCase()));
+  const cur = readForm(), base = { ...saved, ignored_devices: norm(saved.ignored_devices), portable_devices: norm(saved.portable_devices) };
   const dirty = Object.keys(cur).some((k) => !same(cur[k], base[k]));
   $("savebar").classList.toggle("on", dirty);
 }
@@ -1289,7 +1402,7 @@ $("save").addEventListener("click", async () => {
 $("discard").addEventListener("click", () => { hidePin(); fillForm(saved); });
 $("reset").addEventListener("click", () => {
   if (!defaults) return;
-  fillForm({ ...defaults, ignored_devices: saved ? saved.ignored_devices : [] });
+  fillForm({ ...defaults, ignored_devices: saved ? saved.ignored_devices : [], portable_devices: saved ? saved.portable_devices : [] });
   toast("Valores padrão carregados. Salve para aplicar.");
 });
 

@@ -8,7 +8,7 @@ import time
 
 import httpx
 
-from . import config, db, settings, spotify
+from . import config, db, presence, settings, spotify
 
 # O Spotify limita chamadas de apps em modo de desenvolvimento e, se passar do limite, bloqueia
 # por horas (Retry-After). Por isso a consulta é espaçada: o progresso é avançado localmente
@@ -17,6 +17,8 @@ PLAYING_SECONDS = 5       # tocando
 PAUSED_SECONDS = 10       # pausado ou parado há pouco
 IDLE_SECONDS = 30         # nada tocando há mais de IDLE_AFTER
 IDLE_AFTER = 10 * 60
+AWAY_SECONDS = 60         # iPhone fora de casa e nada tocando ao vivo na tela
+HISTORY_SECONDS = 15 * 60  # histórico do Spotify (pega o que tocou fora de casa; ele só guarda as últimas 50)
 BLOCK_FILE = config.DATA_DIR / "spotify_block.json"  # bloqueio sobrevive a um reinício do serviço
 SEEK_TOLERANCE_MS = 2000  # diferença de progresso que indica um pulo na música
 PAUSE_IDLE_SECONDS = 30   # Spotify pausado por mais que isso: a tela vai para a espera
@@ -35,6 +37,8 @@ state = {
     "last_playing": 0.0,            # última vez que o Spotify estava tocando
     "blocked_until": None,          # Spotify pediu para esperar (HTTP 429) até este instante
     "poll_seconds": PLAYING_SECONDS,
+    "history_ok": None,             # última vez que o histórico do Spotify foi trazido
+    "history_error": None,
     "started_at": time.time(),
 }
 
@@ -131,6 +135,29 @@ def _set_block(until: float | None) -> None:
         log.exception("não consegui gravar o bloqueio do Spotify")
 
 
+def _blocked(exc: httpx.HTTPStatusError) -> None:
+    try:
+        wait = int(exc.response.headers.get("Retry-After", 60)) + 1
+    except ValueError:
+        wait = 60
+    until = time.time() + wait
+    _set_block(until)
+    state["last_error"] = _block_message(until)
+    log.warning("Spotify pediu para esperar %s s (até %s)", wait, time.ctime(until))
+    # Sem dados do Spotify enquanto isso: a tela vai para a espera e o microfone pode assumir
+    if state["now"].get("playing") or state["now"].get("title"):
+        state["now"] = {"authorized": True, "playing": False}
+        state["paused_at"] = None
+        publish_now()
+
+
+def _portable(now: dict) -> bool:
+    """Aparelho que pode estar na rua: celulares sempre, mais os marcados no painel (ex.: o notebook)."""
+    if (now.get("device_type") or "").casefold() == "smartphone":
+        return True
+    return (now.get("device") or "").casefold() in {d.casefold() for d in settings.get().portable_devices}
+
+
 def _load_block() -> None:
     try:
         until = json.loads(BLOCK_FILE.read_text())["until"]
@@ -157,6 +184,9 @@ async def run() -> None:
             ignored = {d.casefold() for d in settings.get().ignored_devices}
             if now.get("device") and now["device"].casefold() in ignored:
                 now = {"authorized": True, "playing": False}  # tocando num aparelho ignorado (ex.: carro)
+            away = presence.is_home() is False
+            if away and now.get("device") and _portable(now):
+                now = {"authorized": True, "playing": False}  # fora de casa: o celular entra só pelo histórico
             t = time.time()
             old, old_t = state["now"], state["fetched_at"]
             if now.get("playing") or not now.get("title"):
@@ -170,6 +200,8 @@ async def run() -> None:
             if now.get("playing"):
                 state["last_playing"] = t
             delay = _next_delay(now, t)
+            if away and not now.get("playing"):
+                delay = AWAY_SECONDS
             failures = 0
             if _changed(old, now, int((t - old_t) * 1000)):
                 publish_now()
@@ -180,19 +212,7 @@ async def run() -> None:
         except httpx.HTTPStatusError as exc:
             state["last_error"] = f"HTTP {exc.response.status_code}"
             if exc.response.status_code == 429:
-                try:
-                    wait = int(exc.response.headers.get("Retry-After", 60)) + 1
-                except ValueError:
-                    wait = 60
-                until = time.time() + wait
-                _set_block(until)
-                state["last_error"] = _block_message(until)
-                log.warning("Spotify pediu para esperar %s s (até %s)", wait, time.ctime(until))
-                # Sem dados do Spotify enquanto isso: a tela vai para a espera e o microfone pode assumir
-                if state["now"].get("playing") or state["now"].get("title"):
-                    state["now"] = {"authorized": True, "playing": False}
-                    state["paused_at"] = None
-                    publish_now()
+                _blocked(exc)
                 delay = 0  # o topo do laço espera o bloqueio
         except httpx.TransportError as exc:  # rede oscilando: só acusa se persistir
             failures += 1
@@ -205,3 +225,37 @@ async def run() -> None:
             state["last_error"] = str(exc)
         state["poll_seconds"] = delay
         await asyncio.sleep(delay)
+
+
+async def run_history() -> None:
+    """Traz o histórico do Spotify a cada HISTORY_SECONDS e na hora em que o iPhone volta para casa."""
+    warned = False
+    while True:
+        until = state["blocked_until"]
+        if until and until > time.time():
+            pass
+        elif not spotify.has_history_scope():
+            state["history_error"] = "refaça o login do Spotify para trazer o histórico"
+            if not warned:
+                log.warning("login do Spotify sem a permissão do histórico; refaça o login pelo túnel")
+                warned = True
+        else:
+            try:
+                tracks = await asyncio.to_thread(spotify.recently_played)
+                added = await asyncio.to_thread(db.add_recent, tracks)
+                state.update(history_ok=time.time(), history_error=None)
+                if added:
+                    log.warning("histórico do Spotify: %s faixa(s) nova(s)", added)
+                    publish("history", {})
+            except httpx.HTTPStatusError as exc:
+                state["history_error"] = f"HTTP {exc.response.status_code}"
+                if exc.response.status_code == 429:
+                    _blocked(exc)
+            except Exception as exc:  # o laço não pode morrer
+                log.warning("falha ao trazer o histórico do Spotify: %r", exc)
+                state["history_error"] = str(exc)
+        try:
+            await asyncio.wait_for(presence.arrived.wait(), HISTORY_SECONDS)
+        except asyncio.TimeoutError:
+            pass
+        presence.arrived.clear()
