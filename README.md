@@ -23,6 +23,18 @@ A interface fica em `http://hub-automacoes.local:8888`.
 Login do Spotify (só na primeira vez ou se o token for perdido): abra um túnel com
 `ssh -L 8888:127.0.0.1:8888 lucas@hub-automacoes.local` e acesse `http://127.0.0.1:8888/auth/login`.
 
+## Spotify: consultas, histórico e iPhone fora de casa
+- Consulta ao vivo espaçada (5 s tocando, 10–30 s parado, 60 s com o iPhone fora) para não levar o bloqueio
+  de horas do modo de desenvolvimento (HTTP 429). Se vier, o bloqueio fica salvo em `data/spotify_block.json`.
+- A cada 15 min (e quando o iPhone volta para casa) o servidor traz as últimas 50 faixas do Spotify
+  (`recently-played`), o que inclui o que tocou na rua. Exige a permissão `user-read-recently-played`:
+  quem logou antes de 03/11/2026 precisa refazer o login pelo túnel.
+- **Presença do iPhone** (`backend/app/presence.py`): um atalho do iPhone faz `POST /api/presence` ao entrar
+  no Wi-Fi de casa; o servidor aprende o MAC e depois confere a cada minuto se o celular responde na rede (ARP).
+  Sem resposta por 15 min, conta como fora: o que tocar em celulares (e nos aparelhos marcados em Ajustes como
+  "saem de casa") não aparece ao vivo, só no histórico. No iPhone, deixe o "Endereço Wi-Fi privado" da rede de
+  casa em **Fixo**. Sem o atalho, tudo funciona como antes.
+
 ## Microfone (fase 2)
 `backend/app/listener.py` lê o microfone com `arecord` (dispositivo em `HUB_MIC_DEVICE`, padrão `plughw:1,0`).
 A cada segundo, o YAMNet avalia os últimos 2 s; com música por alguns segundos seguidos, o Shazam identifica a faixa.
