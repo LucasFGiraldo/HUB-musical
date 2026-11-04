@@ -131,12 +131,13 @@ def create(data: BookIn) -> int:
     return book_id
 
 
-def update(book_id: int, data: BookIn, new: bool = False) -> dict:
+def update(book_id: int, data: BookIn, new: bool = False, day: date | None = None) -> dict:
     """Aplica as mudanças com as regras da estante:
     - salvar uma página maior registra as páginas lidas hoje;
     - virar "Lido" guarda a leitura (data de fim = hoje, se vazia) e completa a página;
     - "Relendo" começa uma leitura nova do zero, mantendo as anteriores;
-    - sair de "Lido" para outra situação (exceto "Relendo") desfaz a última leitura registrada (correção)."""
+    - sair de "Lido" para outra situação (exceto "Relendo") desfaz a última leitura registrada (correção).
+    `day`: o dia em que a mudança aconteceu (painel offline, enviada depois); sem ele, hoje."""
     old = get(book_id)
     if not old:
         raise KeyError(book_id)
@@ -147,7 +148,7 @@ def update(book_id: int, data: BookIn, new: bool = False) -> dict:
     for k in ("publisher", "year", "isbn", "ol_key", "lent_to"):
         if k in ch and ch[k] == "":
             ch[k] = None
-    today = date.today().isoformat()
+    today = (day or date.today()).isoformat()
     status, was = ch.get("status", old["status"]), old["status"]
     pages = ch.get("pages", old["pages"])
 

@@ -37,7 +37,7 @@ table inet filter {
     ip6 saddr @rede_local6 udp dport 5353 accept
     ip saddr @rede_local4 tcp dport $portas_lan accept
     ip6 saddr @rede_local6 tcp dport $portas_lan accept
-    iifname "tailscale0" tcp dport $portas_lan accept             # Tailscale: só os aparelhos da sua conta
+    iifname "tailscale0" tcp dport { 22, 443, 8888 } accept       # Tailscale: só os aparelhos da sua conta
     udp dport 41641 accept                                        # Tailscale: conexão direta (criptografada)
   }
   chain forward { type filter hook forward priority filter; policy drop; }

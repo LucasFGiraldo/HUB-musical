@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HUB Musical · Painel</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="HUB">
 <style>
   @font-face {
     font-family: "Bricolage Grotesque";
@@ -277,6 +280,10 @@
   .btn { border: 1px solid var(--line); background: var(--bg); padding: 10px 16px; border-radius: 10px; cursor: pointer; }
   .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .linkbtn { background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; padding: 10px 0; cursor: pointer; }
+  .queue { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 20px; padding: 10px 14px;
+           border: 1px solid var(--line); border-left: 3px solid var(--rust); border-radius: 10px; background: var(--raise); }
+  .queue[hidden] { display: none; }
+  .queue .msg { flex: 1; min-width: 12em; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .3s, transform .3s var(--ease); z-index: 7; }
   .toast.on { opacity: 1; transform: translate(-50%, 0); }
 
@@ -316,6 +323,10 @@
 </header>
 
 <main>
+  <div class="queue" id="queue" role="status" hidden>
+    <span class="msg" id="queue-msg"></span>
+    <button class="btn" type="button" id="queue-send">Enviar agora</button>
+  </div>
   <!-- ================= Agora ================= -->
   <section id="agora" role="tabpanel" aria-labelledby="tab-agora" class="on">
     <h2>Tocando agora</h2>
@@ -883,13 +894,14 @@ $("pin-form").addEventListener("submit", async (e) => {
 $("pin-cancel").addEventListener("click", () => $("pin-dlg").close());
 $("pin-dlg").addEventListener("close", () => { if (pinResolve) { pinResolve(false); pinResolve = null; } });
 
-async function api(method, url, body, raw = false) {
+async function api(method, url, body, raw = false, askPin = true) {
   const opts = () => ({ method, headers: raw ? { "Content-Type": body.type || "application/octet-stream" } : { "Content-Type": "application/json" },
                         body: body === undefined ? undefined : raw ? body : JSON.stringify(body) });
   let res = await fetch(url, opts()).catch(() => null);
-  if (res && res.status === 401 && await askPinDialog()) res = await fetch(url, opts()).catch(() => null);
-  if (!res) throw new Error("Sem conexão com o servidor.");
-  if (res.status === 401) throw new Error("É preciso o PIN para salvar.");
+  if (res && res.status === 401 && askPin && await askPinDialog()) res = await fetch(url, opts()).catch(() => null);
+  // Sem rede, ou o Tailscale responde mas o HUB está fora do ar
+  if (!res || [502, 503, 504].includes(res.status)) throw Object.assign(new Error("Sem conexão com o servidor."), { offline: true });
+  if (res.status === 401) throw Object.assign(new Error("É preciso o PIN para salvar."), { pin: true });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const d = data.detail;
@@ -922,11 +934,11 @@ function readingItem(b, editable) {
     upd.append(el("span", "", "Estou na página"), input, el("span", "", b.pages ? `de ${b.pages}` : ""), save, done);
     upd.addEventListener("submit", async (e) => {
       e.preventDefault();
-      try { await api("PATCH", `/api/shelf/${b.id}`, { page: Number(input.value) }); toast("Página salva"); }
+      try { toast(await saveBook(b.id, { page: Number(input.value) }) ? "Página salva" : SAVED_OFFLINE); }
       catch (err) { toast(err.message); }
     });
     done.addEventListener("click", async () => {
-      try { await api("PATCH", `/api/shelf/${b.id}`, { status: "read" }); toast(`“${b.title}” foi para os lidos`); }
+      try { toast(await saveBook(b.id, { status: "read" }) ? `“${b.title}” foi para os lidos` : SAVED_OFFLINE); }
       catch (err) { toast(err.message); }
     });
     txt.append(upd);
@@ -941,6 +953,7 @@ function readingItem(b, editable) {
 async function loadLibrary() {
   let lib;
   try { lib = await fetch(`/api/library?days=${days}`).then((r) => r.json()); } catch { return; }
+  lib.reading = withPending(lib.reading).filter((b) => READING.includes(b.status));
 
   for (const [id, editable] of [["reading", false], ["shelf-reading", true]]) {
     const ul = $(id); ul.replaceChildren();
@@ -1007,7 +1020,7 @@ const FILTERS = [["all", "Todos", () => true], ...STATUS.filter(([k]) => !READIN
   ["owned", "Tenho", (b) => b.owned], ["favorite", "Favoritos", (b) => b.favorite], ["wishlist", "Desejados", (b) => b.wishlist], ["lent", "Emprestados", (b) => !!b.lent_to]];
 
 async function loadShelf() {
-  try { shelfBooks = await fetch("/api/shelf").then((r) => r.json()); } catch { return; }
+  try { shelfBooks = withPending(await fetch("/api/shelf").then((r) => r.json())); } catch { return; }
   renderShelf();
 }
 
@@ -1210,7 +1223,7 @@ $("book-form").addEventListener("submit", async (e) => {
   $("bk-save").disabled = true; $("bk-save").textContent = "Salvando...";
   try {
     if (current) {
-      await api("PATCH", `/api/shelf/${current.id}`, data);
+      if (!await saveBook(current.id, data)) { $("book-dlg").close(); toast(SAVED_OFFLINE); return; }
     } else {
       const fromCatalog = pendingCover && pendingCover.url && pendingCover.url.includes("covers.openlibrary.org");
       const created = await api("POST", "/api/shelf", { ...data, ol_key: current === null && openBookEdition ? openBookEdition : "",
@@ -1406,6 +1419,88 @@ $("reset").addEventListener("click", () => {
   toast("Valores padrão carregados. Salve para aplicar.");
 });
 
+/* ---------- Sem internet: fila no celular ----------
+   Página, "Terminei" e edição de um livro já cadastrado ficam guardadas neste aparelho quando não há conexão e
+   vão para o servidor, na ordem, assim que ele responder (o painel precisa estar aberto: o iPhone não deixa
+   páginas enviarem em segundo plano). Cada uma leva o dia em que foi feita, para as páginas contarem nesse dia. */
+const QUEUE_KEY = "hub-fila";
+const SAVED_OFFLINE = "Sem conexão: ficou guardado neste celular e vai para o HUB quando conectar";
+const readQueue = () => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch { return []; } };
+function writeQueue(q) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* sem espaço: segue */ } renderQueue(); }
+function localDay() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+
+// Salva no servidor; sem conexão, guarda na fila e devolve null
+async function saveBook(id, changes) {
+  if (readQueue().length) { queueBook(id, changes); flushQueue(); return null; }  // mantém a ordem
+  try { return await api("PATCH", `/api/shelf/${id}`, changes); }
+  catch (err) { if (!err.offline) throw err; queueBook(id, changes); return null; }
+}
+function queueBook(id, changes) {
+  writeQueue([...readQueue(), { id, changes, on: localDay() }]);
+  loadLibrary();  // sem rede, vem do que o celular guardou, já com a mudança
+}
+// Aplica nas listas o que ainda não foi enviado
+function withPending(books) {
+  const q = readQueue();
+  if (!q.length) return books;
+  return books.map((b) => {
+    const mine = q.filter((x) => x.id === b.id);
+    if (!mine.length) return b;
+    const n = Object.assign({ ...b }, ...mine.map((x) => x.changes));
+    if (n.status === "read" && n.pages) n.page = n.pages;
+    n.progress = n.pages && READING.includes(n.status) ? Math.min(1, n.page / n.pages) : null;
+    return n;
+  });
+}
+function renderQueue(note) {
+  const n = readQueue().length;
+  $("queue").hidden = !n;
+  $("queue-msg").textContent = note || (n === 1 ? "1 atualização de leitura guardada neste celular, esperando conexão com o HUB"
+                                                : `${n} atualizações de leitura guardadas neste celular, esperando conexão com o HUB`);
+}
+let flushing = false;
+async function flushQueue(manual = false) {
+  if (flushing || !readQueue().length) return;
+  flushing = true;
+  let sent = 0;
+  try {
+    for (let q = readQueue(); q.length; q = readQueue()) {
+      const { id, changes, on } = q[0];
+      try { await api("PATCH", `/api/shelf/${id}?on=${on}`, changes, false, manual); sent++; }
+      catch (err) {
+        if (err.offline) { if (manual) toast("Ainda sem conexão com o HUB"); return; }
+        if (err.pin) { renderQueue("Para enviar o que ficou guardado, toque em Enviar agora e digite o PIN"); return; }
+        toast(`Uma atualização não foi aceita e foi descartada: ${err.message}`);  // ex.: o livro foi apagado
+      }
+      writeQueue(readQueue().slice(1));
+    }
+  } finally {
+    flushing = false;
+    if (sent) { toast(sent === 1 ? "Atualização guardada enviada ao HUB" : `${sent} atualizações guardadas enviadas ao HUB`); loadLibrary(); }
+  }
+}
+$("queue-send").addEventListener("click", () => flushQueue(true));
+addEventListener("online", () => flushQueue());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) flushQueue(); });
+setInterval(flushQueue, 20000);
+renderQueue();
+
+// Funciona sem internet (só por HTTPS: o endereço .ts.net do Tailscale)
+if ("serviceWorker" in navigator && isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+// Deploy novo: recarrega sozinho, mas espera você terminar o que está editando
+let appVersion = null;
+function onVersion(v) {
+  if (appVersion && v !== appVersion) reloadWhenIdle();
+  appVersion = v;
+}
+function reloadWhenIdle() {
+  const busy = $("savebar").classList.contains("on") || document.querySelector("dialog[open]") || flushing
+    || document.activeElement?.matches("input, textarea, select");
+  if (busy) { setTimeout(reloadWhenIdle, 5000); return; }
+  location.reload();
+}
+
 /* ---------- Início ---------- */
 async function init() {
   try {
@@ -1418,6 +1513,8 @@ async function init() {
   await loadDevices();
   fillForm(saved);
   const es = new EventSource("/api/stream");
+  es.addEventListener("version", (e) => onVersion(JSON.parse(e.data)));
+  es.addEventListener("open", () => flushQueue());
   es.addEventListener("now", (e) => renderNow(JSON.parse(e.data)));
   es.addEventListener("history", () => { if ($("stats").classList.contains("on")) loadStats(); loadDevices(); });
   es.addEventListener("library", loadLibrary);

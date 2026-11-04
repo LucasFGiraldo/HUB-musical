@@ -654,8 +654,15 @@ async function refreshStatus() {
 
 /* ---------- Tempo real ---------- */
 
+let appVersion = null;
 function connect() {
   const es = new EventSource("/api/stream");
+  // Deploy novo (os arquivos da tela mudaram): recarrega sozinha, sem mexer no tablet
+  es.addEventListener("version", (e) => {
+    const v = JSON.parse(e.data);
+    if (appVersion && v !== appVersion) location.reload();
+    appVersion = v;
+  });
   es.addEventListener("open", () => { $("st-server").className = "ok"; refreshStatus(); refreshRecent(); });
   es.addEventListener("now", (e) => applyNow(JSON.parse(e.data)));
   es.addEventListener("listening", (e) => {

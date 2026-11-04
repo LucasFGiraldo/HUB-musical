@@ -1,8 +1,10 @@
 import asyncio
+import hashlib
 import ipaddress
 import json
 import socket
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 from html import escape
 
 import httpx
@@ -24,6 +26,17 @@ async def lifespan(app: FastAPI):
     for task in tasks:
         task.cancel()
 
+
+def _version() -> str:
+    """Impressão digital dos arquivos da tela e do painel: muda a cada deploy que mexe neles, e aí as telas
+    abertas (o tablet em quiosque, o painel) recarregam sozinhas."""
+    h = hashlib.sha1()
+    for f in sorted(p for p in config.FRONTEND_DIR.rglob("*") if p.is_file()):
+        h.update(str(f.relative_to(config.FRONTEND_DIR)).encode()); h.update(f.read_bytes())
+    return h.hexdigest()[:12]
+
+
+VERSION = _version()
 
 app = FastAPI(title="HUB Musical", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -67,8 +80,22 @@ def _local_host(host: str) -> bool:
     return ip.is_private or ip.is_loopback or _tailscale(ip)
 
 
+def _proxied(request: Request) -> bool:
+    """Veio pelo HTTPS do Tailscale ("tailscale serve"): ele entrega pelo 127.0.0.1 com o nome .ts.net."""
+    return request.headers.get("host", "").split(":")[0].lower().endswith(".ts.net")
+
+
+def _client_ip(request: Request) -> str:
+    ip = request.client.host if request.client else "?"
+    if _proxied(request) and ip != "?" and ipaddress.ip_address(ip).is_loopback:
+        ip = request.headers.get("x-forwarded-for", "?").split(",")[-1].strip() or "?"  # o último é o do Tailscale
+    return ip
+
+
 def _from_this_machine(request: Request) -> bool:
-    return bool(request.client) and ipaddress.ip_address(request.client.host).is_loopback
+    """O próprio servidor (túnel SSH); o HTTPS do Tailscale também chega pelo 127.0.0.1, mas não conta."""
+    return (bool(request.client) and ipaddress.ip_address(request.client.host).is_loopback
+            and not _proxied(request) and "x-forwarded-for" not in request.headers)
 
 
 @app.middleware("http")
@@ -77,7 +104,7 @@ async def security(request: Request, call_next):
         return PlainTextResponse("Endereço não permitido", status_code=400)
     response = await call_next(request)
     response.headers.update(SECURITY_HEADERS)
-    if response.headers.get("content-type", "").startswith("text/html"):
+    if response.headers.get("content-type", "").startswith("text/html") or request.url.path in ("/sw.js", "/manifest.webmanifest"):
         response.headers["Cache-Control"] = "no-cache"  # páginas sempre conferem se há versão nova
     return response
 
@@ -110,6 +137,11 @@ def auth_callback(request: Request, code: str | None = None, state: str | None =
     return HTMLResponse("<p>Spotify conectado. Pode fechar esta aba.</p>")
 
 
+@app.get("/api/version")
+def version():
+    return {"version": VERSION}
+
+
 @app.get("/api/now-playing")
 def now_playing():
     return poller.current()
@@ -121,6 +153,7 @@ async def stream():
     async def events():
         q = poller.subscribe()
         try:
+            yield f"event: version\ndata: {json.dumps(VERSION)}\n\n"  # a tela recarrega se mudou
             yield f"event: now\ndata: {json.dumps(poller.current())}\n\n"
             yield f"event: listening\ndata: {json.dumps(poller.listening())}\n\n"
             yield f"event: settings\ndata: {settings.get().model_dump_json()}\n\n"
@@ -331,10 +364,13 @@ async def _catalog_cover(book_id: int, url: str) -> None:
 
 
 @app.patch("/api/shelf/{book_id}")
-async def edit_book(book_id: int, request: Request, payload: dict = Body(...)):
+async def edit_book(book_id: int, request: Request, payload: dict = Body(...), on: date | None = None):
+    """`on`: dia em que a mudança foi feita no painel sem internet (enviada depois): as páginas contam nesse dia."""
     _require_pin(request)
+    if on and not date.today() - timedelta(days=90) <= on <= date.today():
+        on = None
     try:
-        book = await asyncio.to_thread(shelf.update, book_id, _book_in(payload))
+        book = await asyncio.to_thread(shelf.update, book_id, _book_in(payload), False, on)
     except KeyError:
         raise HTTPException(404, "Livro não encontrado.")
     _shelf_changed()
@@ -423,7 +459,7 @@ def pin_status(request: Request):
 @app.post("/api/pin")
 def pin_login(request: Request, pin: str = Body(..., embed=True)):
     """Cria o PIN (se ainda não existe) ou confere o PIN; acertou, ganha o cookie de 30 dias."""
-    ip = request.client.host if request.client else "?"
+    ip = _client_ip(request)
     if wait := auth.locked_for(ip):
         raise HTTPException(429, f"Tentativas demais. Tente de novo em {wait // 60 + 1} min.")
     if not auth.valid_pin(pin):
