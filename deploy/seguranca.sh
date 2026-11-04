@@ -37,6 +37,8 @@ table inet filter {
     ip6 saddr @rede_local6 udp dport 5353 accept
     ip saddr @rede_local4 tcp dport $portas_lan accept
     ip6 saddr @rede_local6 tcp dport $portas_lan accept
+    iifname "tailscale0" tcp dport $portas_lan accept             # Tailscale: só os aparelhos da sua conta
+    udp dport 41641 accept                                        # Tailscale: conexão direta (criptografada)
   }
   chain forward { type filter hook forward priority filter; policy drop; }
   chain output { type filter hook output priority filter; }
@@ -47,6 +49,8 @@ sudo install -m 644 "$TMP" /etc/nftables.conf
 rm -f "$TMP"
 sudo nft -f /etc/nftables.conf
 sudo systemctl enable nftables >/dev/null 2>&1
+# O "flush ruleset" apaga as regras que o Tailscale cria; reiniciá-lo faz ele recriar
+if systemctl is-active --quiet tailscaled; then sudo systemctl restart tailscaled; fi
 
 echo "3/4 SSH: sem login do root, só o usuário $USER..."
 CONF=/etc/ssh/sshd_config.d/10-hub.conf

@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import json
+import socket
 from contextlib import asynccontextmanager
 from html import escape
 
@@ -37,21 +38,33 @@ SECURITY_HEADERS = {
 }
 
 
+# Tailscale (acesso de fora de casa): IPs da rede privada dele e o nome MagicDNS do servidor
+TAILSCALE_NETS = (ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("fd7a:115c:a1e0::/48"))
+HOSTNAME = socket.gethostname().split(".")[0].lower()
+
+
+def _tailscale(ip) -> bool:
+    return any(ip.version == net.version and ip in net for net in TAILSCALE_NETS)
+
+
 def _local_host(host: str) -> bool:
-    """Só aceita endereços da rede de casa: nome .local, localhost ou IP privado. Barra o "DNS rebinding"
-    (um site da internet que finge ser o servidor para mexer nele pelo seu navegador)."""
+    """Só aceita endereços da rede de casa ou do Tailscale: nome .local, localhost, o nome do servidor
+    (MagicDNS, curto ou .ts.net) e IP privado. Barra o "DNS rebinding" (um site da internet que finge ser o
+    servidor para mexer nele pelo seu navegador); nomes .ts.net só resolvem dentro da sua rede Tailscale."""
     if host.startswith("["):  # IPv6: [::1]:8888
         name = host[1:host.find("]")]
     else:
         name = host.rsplit(":", 1)[0]
     name = name.lower()
-    if name == "localhost" or name.endswith((".local", ".localhost")):
+    if name in ("localhost", HOSTNAME) or name.endswith((".local", ".localhost")):
+        return True
+    if name.startswith(HOSTNAME + ".") and name.endswith(".ts.net"):
         return True
     try:
         ip = ipaddress.ip_address(name)
     except ValueError:
         return False
-    return ip.is_private or ip.is_loopback
+    return ip.is_private or ip.is_loopback or _tailscale(ip)
 
 
 def _from_this_machine(request: Request) -> bool:
@@ -167,7 +180,8 @@ def devices():
 async def presence_here(request: Request):
     """Chamado pelo atalho do iPhone ao entrar no Wi-Fi de casa: "cheguei"."""
     client = request.client.host if request.client else ""
-    if not client or not ipaddress.ip_address(client).is_private or ipaddress.ip_address(client).is_loopback:
+    ip = ipaddress.ip_address(client) if client else None
+    if not ip or not ip.is_private or ip.is_loopback or _tailscale(ip):  # pelo Tailscale não prova estar em casa
         raise HTTPException(400, "Chame pelo Wi-Fi de casa")
     try:
         status = await asyncio.to_thread(presence.learn, client)

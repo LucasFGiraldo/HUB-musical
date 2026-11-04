@@ -35,6 +35,14 @@ Login do Spotify (só na primeira vez ou se o token for perdido): abra um túnel
   "saem de casa") não aparece ao vivo, só no histórico. No iPhone, deixe o "Endereço Wi-Fi privado" da rede de
   casa em **Fixo**. Sem o atalho, tudo funciona como antes.
 
+## Acesso de fora de casa (Tailscale)
+O painel abre de qualquer lugar pelo Tailscale, sem abrir porta no roteador: `http://hub-automacoes:8888/painel`
+com o app Tailscale ligado no celular (mesma conta). Instalação, uma vez, depois do deploy:
+`bash ~/hub-musical/deploy/tailscale.sh` (instala pelo repositório oficial, libera as portas 22 e 8888 só na
+interface `tailscale0` e faz o login). No site do Tailscale, desative a expiração da chave do Dell.
+O servidor aceita o nome curto do Dell, `hub-automacoes.<rede>.ts.net` e os IPs 100.64.0.0/10. A presença do
+iPhone continua só pelo Wi-Fi de casa (chamada pelo Tailscale é recusada). Salvar ajustes segue pedindo o PIN.
+
 ## Microfone (fase 2)
 `backend/app/listener.py` lê o microfone com `arecord` (dispositivo em `HUB_MIC_DEVICE`, padrão `plughw:1,0`).
 A cada segundo, o YAMNet avalia os últimos 2 s; com música por alguns segundos seguidos, o Shazam identifica a faixa.
