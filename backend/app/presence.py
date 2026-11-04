@@ -114,11 +114,9 @@ def learn(client_ip: str) -> dict:
         raise LookupError("não achei o aparelho na rede")
     if state["mac"] and state["mac"] != mac:
         raise PermissionError("outro aparelho já está registrado como o iPhone")
-    was_home = is_home()
     state.update(mac=mac, ip=client_ip, last_seen=time.time())
     _save()
-    if not was_home:
-        log.warning("iPhone chegou em casa (atalho)")
+    log.warning("atalho do iPhone: em casa")
     return status()
 
 
@@ -129,8 +127,8 @@ def forget() -> None:
 
 async def run() -> None:
     _load()
+    was_home = is_home()  # comparado entre voltas: a saída acontece pelo relógio, durante o sleep
     while True:
-        was_home = is_home()
         try:
             await asyncio.to_thread(_check)
         except Exception:  # o laço não pode morrer
@@ -140,4 +138,5 @@ async def run() -> None:
             log.warning("iPhone %s", "chegou em casa" if home else "saiu de casa")
             if home:
                 arrived.set()
+        was_home = home
         await asyncio.sleep(CHECK_SECONDS)
