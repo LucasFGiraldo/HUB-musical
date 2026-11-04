@@ -25,6 +25,9 @@ Name=hub-sem-cursor
 fi
 export XCURSOR_THEME=hub-sem-cursor XCURSOR_SIZE=1 XCURSOR_PATH="$HOME/.icons"
 
+# Ajustes por máquina sem mexer neste script (ex.: HUB_KIOSK_FLAGS, WLR_DRM_DEVICES): ~/.config/hub-kiosk.env
+[ -f "$HOME/.config/hub-kiosk.env" ] && . "$HOME/.config/hub-kiosk.env"
+
 # Espera o servidor do HUB responder (no boot ele pode subir depois)
 until (exec 3<>/dev/tcp/127.0.0.1/8888) 2>/dev/null; do sleep 1; done
 
@@ -35,6 +38,6 @@ while true; do
     --disable-session-crashed-bubble --disable-translate --disable-features=Translate \
     --disable-pinch --overscroll-history-navigation=0 --check-for-update-interval=31536000 \
     --password-store=basic --user-data-dir="$PROFILE" \
-    --ozone-platform=wayland "$URL"
+    --ozone-platform=wayland ${HUB_KIOSK_FLAGS:-} "$URL"
   sleep 3
 done
