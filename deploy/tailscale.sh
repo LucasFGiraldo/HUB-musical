@@ -10,6 +10,7 @@ if [ "$(id -u)" = 0 ]; then echo "Rode como o seu usuário (sem sudo na frente);
 
 echo "1/4 Instalando o Tailscale pelo repositório oficial (pkgs.tailscale.com, Debian $VERSION_CODENAME)..."
 if ! command -v tailscale >/dev/null; then
+  sudo apt install -y curl ca-certificates   # o Debian do Dell vem sem curl
   curl -fsSL "https://pkgs.tailscale.com/stable/debian/$VERSION_CODENAME.noarmor.gpg" |
     sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
   curl -fsSL "https://pkgs.tailscale.com/stable/debian/$VERSION_CODENAME.tailscale-keyring.list" |
