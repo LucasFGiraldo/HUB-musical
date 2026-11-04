@@ -38,10 +38,28 @@ Login do Spotify (só na primeira vez ou se o token for perdido): abra um túnel
 ## Acesso de fora de casa (Tailscale)
 O painel abre de qualquer lugar pelo Tailscale, sem abrir porta no roteador: `http://hub-automacoes:8888/painel`
 com o app Tailscale ligado no celular (mesma conta). Instalação, uma vez, depois do deploy:
-`bash ~/hub-musical/deploy/tailscale.sh` (instala pelo repositório oficial, libera as portas 22 e 8888 só na
-interface `tailscale0` e faz o login). No site do Tailscale, desative a expiração da chave do Dell.
+`bash ~/hub-musical/deploy/tailscale.sh` (instala pelo repositório oficial, libera as portas 22, 443 e 8888 só
+na interface `tailscale0` e faz o login). No site do Tailscale, desative a expiração da chave do Dell.
 O servidor aceita o nome curto do Dell, `hub-automacoes.<rede>.ts.net` e os IPs 100.64.0.0/10. A presença do
 iPhone continua só pelo Wi-Fi de casa (chamada pelo Tailscale é recusada). Salvar ajustes segue pedindo o PIN.
+
+O script também liga o **HTTPS do Tailscale** (`tailscale serve`): `https://hub-automacoes.<rede>.ts.net/painel`.
+Por ele as chamadas chegam pelo 127.0.0.1; o servidor usa o `X-Forwarded-For` para o bloqueio de PIN por aparelho
+e não deixa esse caminho abrir o login do Spotify (que segue só pelo túnel SSH).
+
+## Painel sem internet
+Só pelo endereço HTTPS acima (o iPhone exige HTTPS para isso). No Safari: Compartilhar > Adicionar à Tela de Início.
+- `frontend/sw.js` guarda o painel e os dados da estante; tudo vem primeiro da rede e, sem ela (ou após 4 s de
+  sinal fraco), da última cópia. Status ao vivo, busca de livros e capas novas precisam de conexão.
+- Página atual, "Terminei" e edição de um livro já cadastrado, sem conexão, ficam numa fila no aparelho
+  (`localStorage`, chave `hub-fila`) com o dia em que foram feitas; vão ao servidor, na ordem, quando ele responde
+  e o painel está aberto (o iPhone não envia em segundo plano). `PATCH /api/shelf/{id}?on=AAAA-MM-DD` conta as
+  páginas nesse dia (até 90 dias atrás).
+
+## Atualização automática das telas
+O servidor calcula uma impressão dos arquivos de `frontend/` ao iniciar e a manda no início do `/api/stream`.
+Depois de um deploy que mexe neles, as telas reconectam, veem a versão nova e recarregam sozinhas (o tablet em
+quiosque não precisa de toque). O painel espera você terminar de editar (formulário aberto ou alterações não salvas).
 
 ## Microfone (fase 2)
 `backend/app/listener.py` lê o microfone com `arecord` (dispositivo em `HUB_MIC_DEVICE`, padrão `plughw:1,0`).
