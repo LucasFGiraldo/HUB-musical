@@ -71,7 +71,9 @@ echo "4/4 Permissões: só você lê o projeto, os tokens e o banco..."
 chmod 700 ~
 chmod 750 ~/hub-musical
 chmod 700 ~/hub-musical/data
-chmod 600 ~/hub-musical/data/* ~/hub-musical/.env 2>/dev/null || true
+find ~/hub-musical/data -type d -exec chmod 700 {} +   # pastas (capas) precisam de x; só arquivos ficam 600
+find ~/hub-musical/data -type f -exec chmod 600 {} +
+chmod 600 ~/hub-musical/.env 2>/dev/null || true
 
 echo
 echo "Pronto. Firewall ativo, SSH só por chave, atualizações de segurança automáticas."
