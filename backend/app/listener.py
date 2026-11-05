@@ -190,6 +190,7 @@ async def _listen(detector: _Detector, shazam: Shazam) -> None:
             if poller.state["mic"] is None:
                 if streak >= 2:
                     poller.set_listening(True)
+                    poller.wake()  # se for o Spotify começando, a tela não espera a próxima consulta
                 elif now - last_music > LISTEN_GRACE_SECONDS:
                     poller.set_listening(False)
 

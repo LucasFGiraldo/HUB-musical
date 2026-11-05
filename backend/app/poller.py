@@ -8,14 +8,14 @@ import time
 
 import httpx
 
-from . import config, db, presence, settings, spotify
+from . import config, db, palette, presence, settings, spotify
 
 # O Spotify limita chamadas de apps em modo de desenvolvimento e, se passar do limite, bloqueia
 # por horas (Retry-After). Por isso a consulta é espaçada: o progresso é avançado localmente
 # (current()) e uma consulta extra é marcada para o fim da faixa, para pegar a troca de música.
 PLAYING_SECONDS = 5       # tocando
-PAUSED_SECONDS = 10       # pausado ou parado há pouco
-IDLE_SECONDS = 30         # nada tocando há mais de IDLE_AFTER
+PAUSED_SECONDS = 5        # pausado ou parado há pouco (o mesmo ritmo de quando toca, que o Spotify aceita)
+IDLE_SECONDS = 15         # nada tocando há mais de IDLE_AFTER
 IDLE_AFTER = 10 * 60
 AWAY_SECONDS = 60         # iPhone fora de casa e nada tocando ao vivo na tela
 HISTORY_SECONDS = 15 * 60  # histórico do Spotify (pega o que tocou fora de casa; ele só guarda as últimas 50)
@@ -23,7 +23,9 @@ BLOCK_FILE = config.DATA_DIR / "spotify_block.json"  # bloqueio sobrevive a um r
 SEEK_TOLERANCE_MS = 2000  # diferença de progresso que indica um pulo na música
 PAUSE_IDLE_SECONDS = 30   # Spotify pausado por mais que isso: a tela vai para a espera
 ERRORS_TO_REPORT = 5      # falhas de rede seguidas antes de acusar erro (o Wi-Fi às vezes oscila)
+WAKE_MIN_GAP = 3          # mínimo entre uma consulta e uma consulta pedida pelo microfone
 log = logging.getLogger("hub.poller")
+_wake = asyncio.Event()
 
 state = {
     "now": {"authorized": False},   # Spotify
@@ -61,6 +63,20 @@ def current() -> dict:
         elapsed = int((time.time() - state["fetched_at"]) * 1000)
         now["progress_ms"] = min(now["duration_ms"], now["progress_ms"] + elapsed)
     return now
+
+
+def wake() -> None:
+    """Pede uma consulta ao Spotify agora (o microfone ouviu música e o Spotify ainda não apareceu como tocando)."""
+    if time.time() - state["fetched_at"] >= WAKE_MIN_GAP:
+        _wake.set()
+
+
+async def _warm_palette(cover: str) -> None:
+    """Calcula as cores da capa antes de a tela pedir, para o fundo trocar junto com a música."""
+    try:
+        await asyncio.to_thread(palette.for_url, cover)
+    except Exception:  # sem cores a tela usa o fundo normal; não vale um erro no log
+        pass
 
 
 def subscribe() -> asyncio.Queue:
@@ -203,6 +219,8 @@ async def run() -> None:
             if away and not now.get("playing"):
                 delay = AWAY_SECONDS
             failures = 0
+            if now.get("cover") and now.get("id") != old.get("id"):
+                asyncio.create_task(_warm_palette(now["cover"]))
             if _changed(old, now, int((t - old_t) * 1000)):
                 publish_now()
             if now.get("playing") and now.get("id") and now["id"] != last_id:
@@ -224,7 +242,11 @@ async def run() -> None:
             log.exception("falha ao consultar o Spotify")
             state["last_error"] = str(exc)
         state["poll_seconds"] = delay
-        await asyncio.sleep(delay)
+        try:  # dorme, mas acorda na hora se o microfone ouviu música
+            await asyncio.wait_for(_wake.wait(), delay)
+        except asyncio.TimeoutError:
+            pass
+        _wake.clear()
 
 
 async def run_history() -> None:
