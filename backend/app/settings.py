@@ -23,6 +23,9 @@ class Settings(BaseModel):
     gap_seconds: int = Field(2, ge=1, le=10)
     # Letra sincronizada das músicas do Spotify
     lyrics_enabled: bool = True
+    # Fundo da tela com as cores da capa que está tocando, e as manchas de cor se movendo devagar
+    cover_colors: bool = True
+    cover_motion: bool = True
     # Aparelhos do Spotify a ignorar (ex.: o carro): nome exato, sem diferenciar maiúsculas
     ignored_devices: list[str] = []
     # Aparelhos que também vão para a rua (celulares entram sozinhos): com o iPhone fora de casa,

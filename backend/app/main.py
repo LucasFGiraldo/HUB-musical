@@ -14,7 +14,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTe
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from . import auth, catalog, config, db, listener, lyrics, poller, presence, settings, shelf, spotify
+from . import auth, catalog, config, db, listener, lyrics, palette, poller, presence, settings, shelf, spotify
 
 
 @asynccontextmanager
@@ -192,6 +192,17 @@ def get_lyrics(track: str):
         return {"lines": lyrics.for_track(now)}
     except lyrics.Unavailable as exc:
         raise HTTPException(503, f"Letras indisponíveis agora: {exc}")
+
+
+@app.get("/api/palette")
+async def get_palette(url: str):
+    """Três cores principais da capa que está tocando (o fundo da tela usa)."""
+    if url != poller.current().get("cover") and url not in palette._cache:
+        raise HTTPException(404, "Só a capa que está tocando.")  # o servidor não vira baixador de imagens
+    try:
+        return {"colors": await asyncio.to_thread(palette.for_url, url)}
+    except Exception as exc:  # capa sumiu, link quebrado, imagem estranha: a tela usa o fundo normal
+        raise HTTPException(502, f"Não consegui ler as cores da capa: {exc}")
 
 
 @app.get("/api/stats")

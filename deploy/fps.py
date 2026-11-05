@@ -15,9 +15,9 @@ JS = """
   const tick = (t) => { frames.push(t - last); last = t; if (run) requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  // a tela de espera troca entre música e leituras; a capa acende o "halo" (desfoque grande)
+  // a tela de espera troca entre música e leituras; a capa acende o fundo com as cores da capa
   document.body.classList.add('playing');
-  document.querySelectorAll('.halo').forEach((h) => h.classList.add('on'));
+  document.querySelectorAll(".glow").forEach((g, i) => { g.classList.toggle("on", i === 0); g.querySelectorAll("i").forEach((s, j) => s.style.setProperty("--c", ["#c04a3a", "#3a6fc0", "#d8b040"][j])); });
   for (let i = 0; i < 5; i++) { showPage('books'); await wait(1800); showPage('music'); await wait(1800); }
   run = false; await wait(100);
   frames.shift(); frames.sort((a, b) => a - b);

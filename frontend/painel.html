@@ -505,6 +505,16 @@
           <span class="switch"><input type="checkbox" id="lyrics_enabled" name="lyrics_enabled"><span></span></span>
           <div class="help">Mostra a letra sincronizada das músicas do Spotify, quando existe.</div>
         </div>
+        <div class="field">
+          <label for="cover_colors">Fundo com as cores da capa</label>
+          <span class="switch"><input type="checkbox" id="cover_colors" name="cover_colors"><span></span></span>
+          <div class="help">Com música tocando, o fundo ganha as cores do disco e muda junto com a faixa.</div>
+        </div>
+        <div class="field">
+          <label for="cover_motion">Cores em movimento</label>
+          <span class="switch"><input type="checkbox" id="cover_motion" name="cover_motion"><span></span></span>
+          <div class="help">As manchas de cor do fundo andam bem devagar. Desligado, ficam paradas.</div>
+        </div>
       </div>
 
       <h2>Leituras</h2>
@@ -1282,6 +1292,8 @@ const NUM = ["music_seconds", "clip_seconds", "gap_seconds", "recheck_seconds", 
 function fillForm(s) {
   $("mic_enabled").checked = s.mic_enabled;
   $("lyrics_enabled").checked = s.lyrics_enabled;
+  $("cover_colors").checked = s.cover_colors;
+  $("cover_motion").checked = s.cover_motion;
   $("books_enabled").checked = s.books_enabled;
   $("books_show_read").checked = s.books_show_read;
   $("music_threshold").value = s.music_threshold;
@@ -1300,6 +1312,8 @@ function readForm() {
   const v = {
     mic_enabled: $("mic_enabled").checked,
     lyrics_enabled: $("lyrics_enabled").checked,
+    cover_colors: $("cover_colors").checked,
+    cover_motion: $("cover_motion").checked,
     books_enabled: $("books_enabled").checked,
     books_show_read: $("books_show_read").checked,
     music_threshold: Number($("music_threshold").value),

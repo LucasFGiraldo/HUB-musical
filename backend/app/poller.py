@@ -231,6 +231,7 @@ async def run_history() -> None:
     """Traz o histórico do Spotify a cada HISTORY_SECONDS e na hora em que o iPhone volta para casa."""
     warned = False
     while True:
+        wait = HISTORY_SECONDS
         until = state["blocked_until"]
         if until and until > time.time():
             pass
@@ -254,8 +255,10 @@ async def run_history() -> None:
             except Exception as exc:  # o laço não pode morrer
                 log.warning("falha ao trazer o histórico do Spotify: %r", exc)
                 state["history_error"] = str(exc)
+                if isinstance(exc, httpx.TransportError):
+                    wait = 60  # sem rede (ex.: logo depois de religar, antes do Wi-Fi): tenta de novo em 1 min
         try:
-            await asyncio.wait_for(presence.arrived.wait(), HISTORY_SECONDS)
+            await asyncio.wait_for(presence.arrived.wait(), wait)
         except asyncio.TimeoutError:
             pass
         presence.arrived.clear()

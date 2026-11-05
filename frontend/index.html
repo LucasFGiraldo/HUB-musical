@@ -30,7 +30,7 @@
     --rust: #a4532f;
     --shadow: rgba(52, 42, 28, .34);
     --veil: rgba(207, 201, 185, .72);
-    --halo-opacity: .30;
+    --glow-opacity: .78;
   }
   :root[data-theme="night"] {
     --bg: #181a15;
@@ -41,7 +41,7 @@
     --rust: #c0663f;
     --shadow: rgba(0, 0, 0, .55);
     --veil: rgba(24, 26, 21, .7);
-    --halo-opacity: .20;
+    --glow-opacity: .7;
   }
 
   * { box-sizing: border-box; }
@@ -70,14 +70,26 @@
 
   /* ---------- Tocando agora ---------- */
 
-  .halo {
-    position: absolute; inset: -12%;
-    background-size: cover; background-position: center;
-    filter: blur(70px) saturate(.55) sepia(.4);
-    opacity: 0;
-    transition: opacity 1400ms var(--ease);
+  /* Fundo com as cores da capa: três manchas de luz difusas, como cor atrás de vidro fosco.
+     São gradientes (sem desfoque) e a troca e o movimento mexem só em opacidade e posição,
+     o que a placa de vídeo faz sem redesenhar: fica leve até no Dell. */
+  .glow {
+    position: fixed; inset: 0; overflow: hidden; pointer-events: none;
+    opacity: 0; transition: opacity 2200ms var(--ease);
   }
-  body.playing .halo.on { opacity: var(--halo-opacity); }  /* a luz da capa só acompanha a tela da música */
+  body.playing .glow.on { opacity: var(--glow-opacity); }  /* só na tela da música */
+  .glow i {
+    position: absolute; width: 110vmax; height: 110vmax; border-radius: 50%;
+    background: radial-gradient(closest-side, var(--c), transparent);
+    animation: 50s ease-in-out infinite alternate;
+  }
+  .glow i:nth-child(1) { left: -38vmax; top: -48vmax; animation-name: drift1; animation-duration: 47s; }
+  .glow i:nth-child(2) { right: -42vmax; top: -22vmax; animation-name: drift2; animation-duration: 59s; }
+  .glow i:nth-child(3) { left: -5vmax; bottom: -62vmax; animation-name: drift3; animation-duration: 53s; }
+  .glow:not(.on) i, html.still .glow i { animation-play-state: paused; }
+  @keyframes drift1 { to { transform: translate(22vmax, 14vmax) scale(1.1); } }
+  @keyframes drift2 { to { transform: translate(-18vmax, 20vmax) scale(.92); } }
+  @keyframes drift3 { to { transform: translate(16vmax, -16vmax) scale(1.08); } }
 
   #now {
     display: grid;
@@ -282,6 +294,7 @@
   @media (prefers-reduced-motion: reduce) {
     :root { --fade: 200ms; }
     .bars i { animation: none; transform: scaleY(.6); }
+    .glow i { animation: none; }
     #recent figure.enter, #books figure.enter { animation: none; }
     * { transition-duration: 200ms !important; }
   }
@@ -323,8 +336,8 @@
   </symbol>
 </svg>
 
-<div class="halo" id="halo0"></div>
-<div class="halo" id="halo1"></div>
+<div class="glow" id="glow0"><i></i><i></i><i></i></div>
+<div class="glow" id="glow1"><i></i><i></i><i></i></div>
 
 <section id="now" class="view" aria-live="polite">
   <div id="sleeve">
@@ -402,7 +415,10 @@ function applyTheme() {
   const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
   const night = forced ? forced === "night"
     : NIGHT_FROM > DAY_FROM ? (m >= NIGHT_FROM || m < DAY_FROM) : (m >= NIGHT_FROM && m < DAY_FROM);
-  document.documentElement.dataset.theme = night ? "night" : "day";
+  const theme = night ? "night" : "day";
+  if (document.documentElement.dataset.theme === theme) return;
+  document.documentElement.dataset.theme = theme;
+  paintGlow($(`glow${glowSlot}`), glowColors);  // as cores da capa também mudam de tom
 }
 
 function tickClock() {
@@ -417,8 +433,9 @@ function setCover(url) {
   if (url === coverUrl) return;
   coverUrl = url;
   const next = 1 - coverSlot;
+  loadGlow(url);
   if (!url) {
-    $(`cover${coverSlot}`).classList.remove("on"); $(`halo${coverSlot}`).classList.remove("on");
+    $(`cover${coverSlot}`).classList.remove("on");
     return;
   }
   const probe = new Image();
@@ -426,12 +443,59 @@ function setCover(url) {
   probe.onload = () => {
     if (url !== coverUrl) return;
     $(`cover${next}`).src = url;
-    $(`halo${next}`).style.backgroundImage = `url("${url}")`;
-    for (const id of [`cover${next}`, `halo${next}`]) $(id).classList.add("on");
-    for (const id of [`cover${coverSlot}`, `halo${coverSlot}`]) $(id).classList.remove("on");
+    $(`cover${next}`).classList.add("on");
+    $(`cover${coverSlot}`).classList.remove("on");
     coverSlot = next;
   };
   probe.src = url;
+}
+
+/* ---------- Fundo com as cores da capa ---------- */
+
+let glowOn = true, glowSlot = 0, glowColors = null, glowFor = null;
+
+// As cores vêm do servidor (o navegador não pode ler os pixels de uma capa de outro site)
+async function loadGlow(url) {
+  glowFor = url;
+  let colors = null;
+  if (url && glowOn) {
+    try {
+      const r = await fetch(`/api/palette?url=${encodeURIComponent(url)}`);
+      if (r.ok) colors = (await r.json()).colors;
+    } catch { /* sem cores: fica o fundo normal */ }
+  }
+  if (glowFor !== url) return;  // a música já trocou de novo
+  showGlow(colors);
+}
+
+function showGlow(colors) {
+  glowColors = colors;
+  const next = 1 - glowSlot;
+  $(`glow${glowSlot}`).classList.remove("on");
+  if (colors) { paintGlow($(`glow${next}`), colors); $(`glow${next}`).classList.add("on"); }
+  glowSlot = next;
+}
+
+function paintGlow(el, colors) {
+  if (!colors) return;
+  const night = document.documentElement.dataset.theme === "night";
+  el.querySelectorAll("i").forEach((spot, i) => spot.style.setProperty("--c", tone(colors[i % colors.length], night)));
+}
+
+// Ajusta a cor ao tema: de dia, clara e suave sobre o bege; à noite, escura e funda (o texto continua legível)
+function tone(hex, night) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  const clamp = (x, a, z) => Math.min(z, Math.max(a, x));
+  s = s < .08 ? s : clamp(s, .3, night ? .6 : .7);  // cinza continua cinza
+  l = night ? clamp(l, .16, .3) : clamp(l, .52, .7);
+  return `hsl(${Math.round((h + 360) % 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
 }
 
 /* ---------- Tocando agora ---------- */
@@ -679,6 +743,8 @@ function connect() {
     DAY_FROM = toMinutes(s.day_from);
     applyTheme();
     booksOn = s.books_enabled;
+    document.documentElement.classList.toggle("still", !s.cover_motion);
+    if (s.cover_colors !== glowOn) { glowOn = s.cover_colors; loadGlow(coverUrl); }
     if (s.idle_rotate_seconds * 1000 !== rotateMs) { rotateMs = s.idle_rotate_seconds * 1000; scheduleRotate(); }
     if (!booksOn && page === "books") showPage("music");
   });
