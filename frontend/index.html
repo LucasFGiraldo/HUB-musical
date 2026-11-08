@@ -166,6 +166,11 @@
   #source { width: clamp(18px, 3vmin, 34px); height: clamp(18px, 3vmin, 34px); flex: none; }
   #source.spotify { color: var(--spotify); }
   #source.mic { color: var(--rust); }
+  #device {
+    flex: none; max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: clamp(12px, 1.9vmin, 24px); color: var(--muted);
+  }
+  #device:empty { display: none; }
   #progress { flex: 1; min-width: 0; transition: opacity 400ms var(--ease); }
   #progress.hidden { display: none; }
   .track { height: .5vmin; min-height: 3px; background: var(--faint); border-radius: 99px; overflow: hidden; }
@@ -351,6 +356,7 @@
     <div id="lyrics"><div class="window"><ol id="lines"></ol></div></div>
     <div id="foot">
       <svg id="source"><use href="#i-spotify"/></svg>
+      <span id="device"></span>
       <div id="progress">
         <div class="track"><div id="bar"></div></div>
         <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
@@ -507,6 +513,7 @@ function fillInfo(d) {
   const mic = d.source === "mic";
   $("source").setAttribute("class", mic ? "mic" : "spotify");
   $("source").firstElementChild.setAttribute("href", mic ? "#i-mic" : "#i-spotify");
+  $("device").textContent = mic ? "" : d.device || "";  // microfone já tem o ícone próprio
   $("progress").classList.toggle("hidden", !d.duration_ms);
   $("duration").textContent = d.duration_ms ? fmt(d.duration_ms) : "";
 }
@@ -528,6 +535,7 @@ function applyNow(d) {
   track = d;
   fetchedAt = Date.now();
   $("sleeve").classList.toggle("paused", !d.playing);
+  if (!changed && d.source !== "mic") $("device").textContent = d.device || "";
   if (changed) {
     setCover(d.cover);
     swapInfo(d, $("now").classList.contains("on"));

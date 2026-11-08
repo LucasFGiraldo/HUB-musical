@@ -117,7 +117,7 @@ def set_listening(active: bool) -> None:
 
 
 def _changed(old: dict, new: dict, elapsed_ms: int) -> bool:
-    keys = ("authorized", "id", "playing")
+    keys = ("authorized", "id", "playing", "device")  # trocar de aparelho também avisa a tela
     if any(old.get(k) != new.get(k) for k in keys):
         return True
     if new.get("progress_ms") is None or old.get("progress_ms") is None:
