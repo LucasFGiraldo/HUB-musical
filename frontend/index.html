@@ -162,12 +162,13 @@
   #lyrics li.cur { opacity: 1; font-weight: 560; }
   #lyrics li.gap::before { content: "\266A"; }
 
-  #foot { display: flex; align-items: center; gap: 2vmin; margin-top: 4vmin; }
+  #foot { position: relative; display: flex; align-items: center; gap: 2vmin; margin-top: 4vmin; }
   #source { width: clamp(18px, 3vmin, 34px); height: clamp(18px, 3vmin, 34px); flex: none; }
   #source.spotify { color: var(--spotify); }
   #source.mic { color: var(--rust); }
   #device {
-    flex: none; max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    position: absolute; left: 0; top: 100%; margin-top: 1.2vmin; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: clamp(12px, 1.9vmin, 24px); color: var(--muted);
   }
   #device:empty { display: none; }
