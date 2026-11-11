@@ -19,7 +19,9 @@
   /* Dia: pedra e argila. Noite: musgo e linho. Nenhum branco, nenhum amarelo. */
   :root {
     --ease: cubic-bezier(.22, .61, .36, 1);
-    --fade: 900ms;
+    --fade: 650ms;
+    /* Curva só das entradas e saídas das telas: sai rápido do zero e assenta devagar */
+    --out: cubic-bezier(.23, 1, .32, 1);
   }
   :root[data-theme="day"] {
     --bg: #cfc9b9;
@@ -57,15 +59,17 @@
   }
   svg { display: block; }
 
-  /* A que sai some primeiro; a que entra espera um instante, para as duas não se sobreporem */
+  /* Saída: só some, rápido (o olhar já está indo para a próxima).
+     Entrada: espera a outra sair, então sobe um pouco enquanto aparece.
+     A posição só volta ao ponto de partida depois de invisível. */
   .view {
     position: absolute; inset: 0;
-    opacity: 0; visibility: hidden;
-    transition: opacity 500ms var(--ease), visibility 0s linear 500ms;
+    opacity: 0; visibility: hidden; transform: translateY(1.4vmin);
+    transition: opacity 300ms var(--out), visibility 0s linear 300ms, transform 0s linear 300ms;
   }
   .view.on {
-    opacity: 1; visibility: visible;
-    transition: opacity var(--fade) var(--ease) 380ms, visibility 0s linear 0s;
+    opacity: 1; visibility: visible; transform: none;
+    transition: opacity var(--fade) var(--out) 220ms, visibility 0s linear 0s, transform var(--fade) var(--out) 220ms;
   }
 
   /* ---------- Tocando agora ---------- */
@@ -108,7 +112,7 @@
   }
   #sleeve img {
     position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-    opacity: 0; transition: opacity 1000ms var(--ease);
+    opacity: 0; transition: opacity 800ms var(--ease);
   }
   #sleeve img.on { opacity: 1; }
   #sleeve::after {
@@ -126,9 +130,13 @@
 
   #info {
     min-width: 0; max-width: 56ch;
-    transition: opacity 280ms var(--ease), transform 280ms var(--ease);
+    transition: opacity 520ms var(--out), transform 520ms var(--out), filter 520ms var(--out);
   }
-  #info.swap { opacity: 0; transform: translateY(1.2vmin); }
+  /* Troca de faixa: o texto sai rápido e o novo chega do mesmo jeito das telas (sobe e entra em foco) */
+  #info.swap {
+    opacity: 0; transform: translateY(1vmin); filter: blur(.5vmin);
+    transition-duration: 220ms;
+  }
   #title {
     margin: 0; font-size: clamp(28px, 6.4vmin, 84px); font-weight: 650; font-stretch: 88%;
     line-height: 1.02; letter-spacing: -.02em;
@@ -184,13 +192,13 @@
   /* ---------- Espera ---------- */
 
   #idle { display: grid; place-items: center; }
-  #idle .body { transition: opacity 900ms var(--ease), filter 900ms var(--ease); }
+  #idle .body { transition: opacity 600ms var(--out), filter 600ms var(--out); }
   body.listening #idle .body, body.listening #clock { opacity: .35; filter: blur(.4vmin); }
   #clock {
     position: absolute; top: 5.5vmin; left: 0; right: 0; text-align: center;
     font-size: clamp(22px, 5.2vmin, 64px); font-weight: 250; font-stretch: 80%; letter-spacing: .02em;
     color: var(--muted); font-variant-numeric: tabular-nums;
-    transition: opacity 900ms var(--ease), filter 900ms var(--ease);
+    transition: opacity 600ms var(--out), filter 600ms var(--out);
   }
   #recent { display: flex; justify-content: center; gap: 2.8vmin; width: 100%; padding: 0 4vw; }
   #recent figure { margin: 0; width: min(17vw, 27vh); min-width: 0; }
@@ -202,16 +210,18 @@
     margin-top: 1.4vmin; font-size: clamp(11px, 1.7vmin, 21px); font-weight: 420; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #recent figure.enter, #books figure.enter { animation: rise 1100ms var(--ease) both; animation-delay: calc(var(--i) * 110ms); }
-  @keyframes rise { from { opacity: 0; transform: translateY(2.4vmin); } to { opacity: 1; transform: none; } }
+  /* As capas começam a subir quando a página já está aparecendo (250 ms) e entram em sequência curta */
+  #recent figure.enter, #books figure.enter { animation: rise 700ms var(--out) both; animation-delay: calc(250ms + var(--i) * 70ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(1.6vmin); } to { opacity: 1; transform: none; } }
 
   /* Páginas da espera (músicas / leituras), uma sobre a outra, trocando a cada N segundos */
   #idle .body { display: grid; width: 100%; }
   .page {
     grid-area: 1 / 1; display: grid; place-items: center;
-    opacity: 0; visibility: hidden; transition: opacity 600ms var(--ease), visibility 0s linear 600ms;
+    opacity: 0; visibility: hidden; transition: opacity 350ms var(--out), visibility 0s linear 350ms;
   }
-  .page.on { opacity: 1; visibility: visible; transition: opacity 600ms var(--ease) 300ms, visibility 0s; }
+  /* Só a opacidade: quem sobe são as capas (rise), para não animar duas vezes a mesma coisa */
+  .page.on { opacity: 1; visibility: visible; transition: opacity 450ms var(--out) 250ms, visibility 0s; }
 
   /* Leituras: capas em pé (livro) em vez de quadradas (disco); a barra marca o que está sendo lido */
   #books { display: flex; justify-content: center; align-items: flex-end; gap: 3.4vmin; width: 100%; padding: 0 4vw; }
@@ -267,16 +277,16 @@
   #listening {
     position: absolute; inset: 0; display: grid; place-items: center;
     opacity: 0; visibility: hidden; pointer-events: none;
-    transition: opacity 700ms var(--ease), visibility 0s linear 700ms;
+    transition: opacity 300ms var(--out), visibility 0s linear 300ms;
   }
-  #listening.on { opacity: 1; visibility: visible; transition-delay: 0s; }
+  #listening.on { opacity: 1; visibility: visible; transition: opacity 600ms var(--out), visibility 0s; }
   #listening .panel {
     display: grid; justify-items: center; gap: 3.4vmin; padding: 7vmin 9vmin; border-radius: 4vmin;
     background: var(--veil); box-shadow: 0 4vmin 12vmin -3vmin var(--shadow);
     -webkit-backdrop-filter: blur(2.4vmin); backdrop-filter: blur(2.4vmin);
-    transform: scale(.96); transition: transform 900ms var(--ease);
+    transform: translateY(1.2vmin) scale(.98); transition: transform 0s linear 300ms;
   }
-  #listening.on .panel { transform: none; }
+  #listening.on .panel { transform: none; transition: transform 700ms var(--out); }
   .bars { display: flex; align-items: center; gap: 1.2vmin; height: 12vmin; color: var(--rust); }
   .bars i {
     display: block; width: 1.1vmin; min-width: 5px; height: 100%; border-radius: 99px; background: currentColor;
@@ -302,6 +312,7 @@
     .bars i { animation: none; transform: scaleY(.6); }
     .glow i { animation: none; }
     #recent figure.enter, #books figure.enter { animation: none; }
+    .view, .view.on, #listening .panel, #listening.on .panel, #info, #info.swap { transform: none; filter: none; }
     * { transition-duration: 200ms !important; }
   }
 </style>
@@ -524,7 +535,7 @@ function swapInfo(d, animate) {
   clearTimeout(swapTimer);
   if (!animate) { fillInfo(d); return; }
   $("info").classList.add("swap");
-  swapTimer = setTimeout(() => { fillInfo(d); $("info").classList.remove("swap"); }, 300);
+  swapTimer = setTimeout(() => { fillInfo(d); $("info").classList.remove("swap"); }, 240);
 }
 
 function applyNow(d) {
