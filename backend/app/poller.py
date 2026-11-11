@@ -201,7 +201,7 @@ async def run() -> None:
             if now.get("device") and now["device"].casefold() in ignored:
                 now = {"authorized": True, "playing": False}  # tocando num aparelho ignorado (ex.: carro)
             away = presence.is_home() is False
-            if away and now.get("device") and _portable(now):
+            if away and settings.get().hide_when_away and now.get("device") and _portable(now):
                 now = {"authorized": True, "playing": False}  # fora de casa: o celular entra só pelo histórico
             t = time.time()
             old, old_t = state["now"], state["fetched_at"]

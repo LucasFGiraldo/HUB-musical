@@ -31,6 +31,8 @@ class Settings(BaseModel):
     # Aparelhos que também vão para a rua (celulares entram sozinhos): com o iPhone fora de casa,
     # o que tocar neles não aparece ao vivo na tela, só no histórico
     portable_devices: list[str] = []
+    # Desligado, o que toca no celular aparece ao vivo na tela mesmo com o iPhone fora de casa
+    hide_when_away: bool = True
     # Horários em que a tela troca para o tema noturno e volta ao claro (HH:MM)
     night_from: str = Field("19:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     day_from: str = Field("08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")

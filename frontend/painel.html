@@ -515,6 +515,11 @@
           <span class="switch"><input type="checkbox" id="cover_motion" name="cover_motion"><span></span></span>
           <div class="help">As manchas de cor do fundo andam bem devagar. Desligado, ficam paradas.</div>
         </div>
+        <div class="field">
+          <label for="hide_when_away">Esconder o celular quando estou fora</label>
+          <span class="switch"><input type="checkbox" id="hide_when_away" name="hide_when_away"><span></span></span>
+          <div class="help">Com o iPhone fora de casa, o que toca no celular não aparece ao vivo, só no histórico. Desligado, aparece sempre.</div>
+        </div>
       </div>
 
       <h2>Leituras</h2>
@@ -1294,6 +1299,7 @@ function fillForm(s) {
   $("lyrics_enabled").checked = s.lyrics_enabled;
   $("cover_colors").checked = s.cover_colors;
   $("cover_motion").checked = s.cover_motion;
+  $("hide_when_away").checked = s.hide_when_away;
   $("books_enabled").checked = s.books_enabled;
   $("books_show_read").checked = s.books_show_read;
   $("music_threshold").value = s.music_threshold;
@@ -1314,6 +1320,7 @@ function readForm() {
     lyrics_enabled: $("lyrics_enabled").checked,
     cover_colors: $("cover_colors").checked,
     cover_motion: $("cover_motion").checked,
+    hide_when_away: $("hide_when_away").checked,
     books_enabled: $("books_enabled").checked,
     books_show_read: $("books_show_read").checked,
     music_threshold: Number($("music_threshold").value),
