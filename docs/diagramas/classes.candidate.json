@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "diagram_type": "class",
+  "meta": {
+    "title": "HUB Musical: classes e módulos do servidor",
+    "output": ".archify/class-hub-musical-20261107-224849/hub-musical-classes.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/LucasFGiraldo/HUB-musical.git",
+      "revision": "1794953eeee1a8ae5c2b0aca46e8fb95fac32068"
+    }
+  },
+  "layout": { "mode": "grid", "gapX": 84, "typeMaxW": 215 },
+  "types": [
+    {
+      "id": "spotify", "label": "spotify", "kind": "class", "row": 0, "col": 0,
+      "sublabel": "módulo · API do Spotify e login",
+      "attributes": [{ "name": "TOKEN_FILE", "type": "Path", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "login_url", "returns": "str", "visibility": "public" },
+        { "name": "exchange_code", "parameters": "code, state", "returns": "None", "visibility": "public" },
+        { "name": "now_playing", "returns": "dict", "visibility": "public" },
+        { "name": "recently_played", "returns": "list[dict]", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/spotify.py", "line": 15, "end_line": 20 },
+        { "path": "backend/app/spotify.py", "line": 130, "end_line": 135 }
+      ]
+    },
+    {
+      "id": "palette", "label": "palette", "kind": "class", "row": 0, "col": 1,
+      "sublabel": "módulo · cores da capa",
+      "attributes": [{ "name": "CACHE_SIZE", "type": "int", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "extract", "parameters": "data, count", "returns": "list[str]", "visibility": "public" },
+        { "name": "for_url", "parameters": "url", "returns": "list[str]", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/palette.py", "line": 15, "end_line": 16 },
+        { "path": "backend/app/palette.py", "line": 69, "end_line": 70 }
+      ]
+    },
+    {
+      "id": "catalog", "label": "catalog", "kind": "class", "row": 0, "col": 2,
+      "sublabel": "módulo · Open Library e capas",
+      "methods": [
+        { "name": "search", "parameters": "q", "returns": "list[dict]", "visibility": "public" },
+        { "name": "edition_details", "parameters": "edition", "returns": "dict", "visibility": "public" },
+        { "name": "download_image", "parameters": "url", "returns": "bytes", "visibility": "public" },
+        { "name": "isbn_from_photo", "parameters": "data", "returns": "str | None", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/catalog.py", "line": 73, "end_line": 74 },
+        { "path": "backend/app/catalog.py", "line": 195, "end_line": 196 }
+      ]
+    },
+    {
+      "id": "settings", "label": "Settings", "kind": "class", "row": 0, "col": 3,
+      "sublabel": "classe pydantic · ajustes do painel",
+      "attributes": [
+        { "name": "mic_enabled", "type": "bool", "visibility": "public" },
+        { "name": "music_threshold", "type": "float", "visibility": "public" },
+        { "name": "ignored_devices", "type": "list[str]", "visibility": "public" },
+        { "name": "cover_colors", "type": "bool", "visibility": "public" }
+      ],
+      "methods": [
+        { "name": "get", "returns": "Settings", "visibility": "public", "static": true },
+        { "name": "update", "parameters": "changes", "returns": "Settings", "visibility": "public", "static": true }
+      ],
+      "sources": [
+        { "path": "backend/app/settings.py", "line": 10, "end_line": 12 },
+        { "path": "backend/app/settings.py", "line": 48, "end_line": 49 },
+        { "path": "backend/app/settings.py", "line": 58, "end_line": 59 }
+      ]
+    },
+    {
+      "id": "presence", "label": "presence", "kind": "class", "row": 1, "col": 0,
+      "sublabel": "módulo · iPhone em casa?",
+      "attributes": [{ "name": "AWAY_AFTER", "type": "int", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "is_home", "returns": "bool | None", "visibility": "public" },
+        { "name": "learn", "parameters": "client_ip", "returns": "dict", "visibility": "public" },
+        { "name": "forget", "returns": "None", "visibility": "public" },
+        { "name": "run", "returns": "None", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/presence.py", "line": 33, "end_line": 37 },
+        { "path": "backend/app/presence.py", "line": 108, "end_line": 110 },
+        { "path": "backend/app/presence.py", "line": 128, "end_line": 130 }
+      ]
+    },
+    {
+      "id": "poller", "label": "poller", "kind": "class", "row": 1, "col": 1,
+      "sublabel": "módulo · consulta e avisa as telas",
+      "attributes": [{ "name": "state", "type": "dict", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "run", "returns": "None", "visibility": "public" },
+        { "name": "run_history", "returns": "None", "visibility": "public" },
+        { "name": "current", "returns": "dict", "visibility": "public" },
+        { "name": "wake", "returns": "None", "visibility": "public" },
+        { "name": "publish", "parameters": "event, data", "returns": "None", "visibility": "public" },
+        { "name": "subscribe", "returns": "Queue", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/poller.py", "line": 30, "end_line": 45 },
+        { "path": "backend/app/poller.py", "line": 50, "end_line": 52 },
+        { "path": "backend/app/poller.py", "line": 188, "end_line": 192 }
+      ]
+    },
+    {
+      "id": "api", "label": "main (API)", "kind": "class", "row": 1, "col": 2,
+      "sublabel": "módulo FastAPI · rotas e SSE",
+      "attributes": [
+        { "name": "app", "type": "FastAPI", "visibility": "public", "static": true },
+        { "name": "VERSION", "type": "str", "visibility": "public", "static": true }
+      ],
+      "methods": [
+        { "name": "lifespan", "parameters": "app", "returns": "None", "visibility": "public" },
+        { "name": "security", "parameters": "request, call_next", "returns": "Response", "visibility": "public" },
+        { "name": "stream", "returns": "StreamingResponse", "visibility": "public" },
+        { "name": "_require_pin", "parameters": "request", "returns": "None", "visibility": "private" }
+      ],
+      "sources": [
+        { "path": "backend/app/main.py", "line": 21, "end_line": 27 },
+        { "path": "backend/app/main.py", "line": 101, "end_line": 109 },
+        { "path": "backend/app/main.py", "line": 150, "end_line": 171 }
+      ]
+    },
+    {
+      "id": "auth", "label": "auth", "kind": "class", "row": 1, "col": 3,
+      "sublabel": "módulo · PIN e sessão do painel",
+      "attributes": [{ "name": "MAX_FAILS", "type": "int", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "pin_set", "returns": "bool", "visibility": "public" },
+        { "name": "create", "parameters": "pin", "returns": "str", "visibility": "public" },
+        { "name": "login", "parameters": "pin, ip", "returns": "str | None", "visibility": "public" },
+        { "name": "check", "parameters": "token", "returns": "bool", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/auth.py", "line": 15, "end_line": 20 },
+        { "path": "backend/app/auth.py", "line": 36, "end_line": 37 },
+        { "path": "backend/app/auth.py", "line": 60, "end_line": 62 }
+      ]
+    },
+    {
+      "id": "listener", "label": "listener", "kind": "class", "row": 2, "col": 0,
+      "sublabel": "módulo · microfone, YAMNet e Shazam",
+      "attributes": [{ "name": "status", "type": "dict", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "run", "returns": "None", "visibility": "public" },
+        { "name": "_listen", "parameters": "detector, shazam", "returns": "None", "visibility": "private" },
+        { "name": "_identify", "parameters": "shazam, pcm, epoch", "returns": "None", "visibility": "private" }
+      ],
+      "sources": [
+        { "path": "backend/app/listener.py", "line": 30, "end_line": 36 },
+        { "path": "backend/app/listener.py", "line": 142, "end_line": 144 },
+        { "path": "backend/app/listener.py", "line": 212, "end_line": 214 }
+      ]
+    },
+    {
+      "id": "db", "label": "db", "kind": "class", "row": 2, "col": 1,
+      "sublabel": "módulo · SQLite hub.db",
+      "attributes": [{ "name": "DB_FILE", "type": "Path", "visibility": "public", "static": true }],
+      "methods": [
+        { "name": "init", "returns": "None", "visibility": "public" },
+        { "name": "add_play", "parameters": "track, played_at", "returns": "None", "visibility": "public" },
+        { "name": "recent", "parameters": "limit", "returns": "list[dict]", "visibility": "public" },
+        { "name": "stats", "parameters": "days, top", "returns": "dict", "visibility": "public" },
+        { "name": "save_lyrics", "parameters": "track_id, synced", "returns": "None", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/db.py", "line": 19, "end_line": 22 },
+        { "path": "backend/app/db.py", "line": 50, "end_line": 51 },
+        { "path": "backend/app/db.py", "line": 139, "end_line": 140 }
+      ]
+    },
+    {
+      "id": "shelf", "label": "shelf", "kind": "class", "row": 2, "col": 2,
+      "sublabel": "módulo · estante de livros",
+      "methods": [
+        { "name": "create", "parameters": "data: BookIn", "returns": "int", "visibility": "public" },
+        { "name": "update", "parameters": "book_id, data, new, day", "returns": "dict", "visibility": "public" },
+        { "name": "snapshot", "returns": "dict", "visibility": "public" },
+        { "name": "library", "parameters": "days", "returns": "dict", "visibility": "public" },
+        { "name": "export_csv", "returns": "str", "visibility": "public" }
+      ],
+      "sources": [
+        { "path": "backend/app/shelf.py", "line": 116, "end_line": 117 },
+        { "path": "backend/app/shelf.py", "line": 134, "end_line": 135 },
+        { "path": "backend/app/shelf.py", "line": 241, "end_line": 242 }
+      ]
+    },
+    {
+      "id": "bookin", "label": "BookIn", "kind": "class", "row": 2, "col": 3,
+      "sublabel": "classe pydantic · dados de um livro",
+      "attributes": [
+        { "name": "title", "type": "str | None", "visibility": "public" },
+        { "name": "pages", "type": "int | None", "visibility": "public" },
+        { "name": "status", "type": "Status | None", "visibility": "public" },
+        { "name": "rating", "type": "float | None", "visibility": "public" }
+      ],
+      "methods": [
+        { "name": "half_steps", "parameters": "v", "returns": "float | None", "visibility": "public", "static": true }
+      ],
+      "sources": [
+        { "path": "backend/app/shelf.py", "line": 27, "end_line": 30 },
+        { "path": "backend/app/shelf.py", "line": 47, "end_line": 52 }
+      ]
+    },
+    {
+      "id": "detector", "label": "_Detector", "kind": "class", "row": 3, "col": 0,
+      "sublabel": "classe · modelo YAMNet (TFLite)",
+      "attributes": [{ "name": "_it", "type": "Interpreter", "visibility": "private" }],
+      "methods": [
+        { "name": "music_scores", "parameters": "audio", "returns": "tuple[float, float]", "visibility": "public" }
+      ],
+      "sources": [{ "path": "backend/app/listener.py", "line": 39, "end_line": 52 }]
+    },
+    {
+      "id": "lyrics", "label": "lyrics", "kind": "class", "row": 3, "col": 1,
+      "sublabel": "módulo · letra (LRCLIB)",
+      "methods": [
+        { "name": "for_track", "parameters": "track", "returns": "list[dict] | None", "visibility": "public" }
+      ],
+      "sources": [{ "path": "backend/app/lyrics.py", "line": 68, "end_line": 75 }]
+    }
+  ],
+  "relationships": [
+    { "id": "api_poller", "from": "api", "to": "poller", "kind": "dependency", "label": "mostra" },
+    { "id": "api_catalog", "from": "api", "to": "catalog", "kind": "dependency", "label": "busca livros" },
+    { "id": "api_settings", "from": "api", "to": "settings", "kind": "dependency", "label": "lê e grava" },
+    { "id": "api_auth", "from": "api", "to": "auth", "kind": "dependency", "label": "PIN" },
+    { "id": "api_shelf", "from": "api", "to": "shelf", "kind": "dependency", "label": "estante" },
+    { "id": "poller_spotify", "from": "poller", "to": "spotify", "kind": "dependency", "label": "consulta" },
+    { "id": "poller_palette", "from": "poller", "to": "palette", "kind": "dependency", "label": "pré-calcula" },
+    { "id": "poller_presence", "from": "poller", "to": "presence", "kind": "dependency", "label": "em casa?" },
+    { "id": "poller_db", "from": "poller", "to": "db", "kind": "dependency", "label": "registra" },
+    { "id": "palette_catalog", "from": "palette", "to": "catalog", "kind": "dependency", "label": "capa" },
+    { "id": "listener_poller", "from": "listener", "to": "poller", "kind": "dependency", "label": "publica a faixa" },
+    { "id": "listener_db", "from": "listener", "to": "db", "kind": "dependency", "label": "grava" },
+    { "id": "listener_detector", "from": "listener", "to": "detector", "kind": "composition", "label": "cria" },
+    { "id": "shelf_db", "from": "shelf", "to": "db", "kind": "dependency", "label": "grava" },
+    { "id": "shelf_bookin", "from": "shelf", "to": "bookin", "kind": "dependency", "label": "recebe" },
+    { "id": "lyrics_db", "from": "lyrics", "to": "db", "kind": "dependency", "label": "guarda" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Como ler",
+      "items": [
+        "O servidor é Python em módulos de funções: só Settings, BookIn e _Detector são classes de verdade.",
+        "Cada módulo aparece como um tipo, com as funções públicas principais e o estado do módulo."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Setas que não foram desenhadas",
+      "items": [
+        "main também chama db, lyrics, palette, spotify (login) e presence.learn nas rotas.",
+        "main inicia poller, presence e listener na partida (lifespan).",
+        "poller, listener e shelf leem Settings; lyrics e a estante gravam no mesmo SQLite via db."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Fora deste desenho",
+      "items": [
+        "A tela (index.html) e o painel (painel.html) recebem tudo por /api/stream (SSE) e chamam as rotas de main."
+      ]
+    }
+  ]
+}

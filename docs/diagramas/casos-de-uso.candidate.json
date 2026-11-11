@@ -1,0 +1,404 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "HUB Musical: casos de uso",
+    "output": ".archify/usecase-hub-musical-20261107-224849/hub-musical-casos-de-uso.html",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "Caso de uso na tela"
+        },
+        "backend": {
+          "label": "Caso de uso do painel e do servidor"
+        },
+        "external": {
+          "label": "Ator"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "morador",
+      "type": "external",
+      "label": "Morador",
+      "sublabel": "vê a tela",
+      "icon": "person",
+      "pos": [
+        40,
+        291
+      ],
+      "size": [
+        150,
+        80
+      ]
+    },
+    {
+      "id": "iphone",
+      "type": "external",
+      "label": "iPhone",
+      "sublabel": "atalho do Wi-Fi",
+      "pos": [
+        40,
+        613
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "dono",
+      "type": "external",
+      "label": "Dono do HUB",
+      "sublabel": "usa o painel",
+      "icon": "person",
+      "pos": [
+        40,
+        837
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "uc_letra",
+      "type": "frontend",
+      "label": "Ver a letra sincronizada",
+      "pos": [
+        430,
+        136
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_musica",
+      "type": "frontend",
+      "label": "Ver a música tocando",
+      "pos": [
+        430,
+        232
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_cores",
+      "type": "frontend",
+      "label": "Ver o fundo com as cores da capa",
+      "pos": [
+        430,
+        328
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_ambiente",
+      "type": "frontend",
+      "label": "Identificar a música do ambiente",
+      "pos": [
+        430,
+        40
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_historico",
+      "type": "frontend",
+      "label": "Consultar histórico e estatísticas",
+      "pos": [
+        430,
+        424
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_espera",
+      "type": "frontend",
+      "label": "Ver a estante na tela de espera",
+      "pos": [
+        430,
+        520
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_cheguei",
+      "type": "backend",
+      "label": "Avisar que cheguei em casa",
+      "pos": [
+        430,
+        616
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_login",
+      "type": "backend",
+      "label": "Conectar a conta do Spotify",
+      "pos": [
+        430,
+        712
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_ajustes",
+      "type": "backend",
+      "label": "Ajustar as configurações",
+      "pos": [
+        430,
+        808
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_pin",
+      "type": "security",
+      "label": "Entrar com o PIN do painel",
+      "pos": [
+        430,
+        904
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "uc_estante",
+      "type": "backend",
+      "label": "Gerenciar a estante de livros",
+      "pos": [
+        430,
+        1000
+      ],
+      "size": [
+        240,
+        54
+      ]
+    },
+    {
+      "id": "lrclib",
+      "type": "external",
+      "label": "LRCLIB",
+      "sublabel": "letras",
+      "pos": [
+        910,
+        133
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "spotify",
+      "type": "external",
+      "label": "Spotify",
+      "sublabel": "o que está tocando",
+      "pos": [
+        910,
+        469
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "shazam",
+      "type": "external",
+      "label": "Shazam",
+      "sublabel": "reconhece a faixa",
+      "pos": [
+        910,
+        37
+      ],
+      "size": [
+        150,
+        60
+      ]
+    },
+    {
+      "id": "openlibrary",
+      "type": "external",
+      "label": "Open Library",
+      "sublabel": "livros e capas",
+      "pos": [
+        910,
+        997
+      ],
+      "size": [
+        150,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "HUB Musical",
+      "wraps": [
+        "uc_letra",
+        "uc_musica",
+        "uc_cores",
+        "uc_ambiente",
+        "uc_historico",
+        "uc_espera",
+        "uc_cheguei",
+        "uc_login",
+        "uc_ajustes",
+        "uc_pin",
+        "uc_estante"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "morador_musica",
+      "from": "morador",
+      "to": "uc_musica"
+    },
+    {
+      "id": "morador_ambiente",
+      "from": "morador",
+      "to": "uc_ambiente"
+    },
+    {
+      "id": "morador_historico",
+      "from": "morador",
+      "to": "uc_historico"
+    },
+    {
+      "id": "morador_espera",
+      "from": "morador",
+      "to": "uc_espera"
+    },
+    {
+      "id": "iphone_cheguei",
+      "from": "iphone",
+      "to": "uc_cheguei"
+    },
+    {
+      "id": "dono_login",
+      "from": "dono",
+      "to": "uc_login"
+    },
+    {
+      "id": "dono_ajustes",
+      "from": "dono",
+      "to": "uc_ajustes"
+    },
+    {
+      "id": "dono_estante",
+      "from": "dono",
+      "to": "uc_estante"
+    },
+    {
+      "id": "letra_estende",
+      "from": "uc_letra",
+      "to": "uc_musica",
+      "label": "«extend»",
+      "variant": "dashed"
+    },
+    {
+      "id": "cores_estende",
+      "from": "uc_cores",
+      "to": "uc_musica",
+      "label": "«extend»",
+      "variant": "dashed"
+    },
+    {
+      "id": "ajustes_inclui",
+      "from": "uc_ajustes",
+      "to": "uc_pin",
+      "label": "«include»",
+      "variant": "dashed"
+    },
+    {
+      "id": "estante_inclui",
+      "from": "uc_estante",
+      "to": "uc_pin",
+      "label": "«include»",
+      "variant": "dashed"
+    },
+    {
+      "id": "letra_lrclib",
+      "from": "uc_letra",
+      "to": "lrclib",
+      "label": "busca a letra"
+    },
+    {
+      "id": "musica_spotify",
+      "from": "uc_musica",
+      "to": "spotify",
+      "label": "consulta"
+    },
+    {
+      "id": "login_spotify",
+      "from": "uc_login",
+      "to": "spotify",
+      "label": "autoriza (OAuth)"
+    },
+    {
+      "id": "ambiente_shazam",
+      "from": "uc_ambiente",
+      "to": "shazam",
+      "label": "identifica"
+    },
+    {
+      "id": "estante_openlibrary",
+      "from": "uc_estante",
+      "to": "openlibrary",
+      "label": "busca dados e capas"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Como ler",
+      "items": [
+        "Não existe um tipo de caso de uso no Archify: os casos de uso são caixas dentro da fronteira HUB Musical e os atores ficam fora.",
+        "Linha tracejada: «extend» (acrescenta algo ao caso de uso base) e «include» (sempre passa pelo outro)."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "O que o diagrama resume",
+      "items": [
+        "Gerenciar a estante e ajustar as configurações pedem o PIN; ver a tela não pede.",
+        "A música do ambiente só é identificada quando o Spotify não está tocando."
+      ]
+    }
+  ]
+}
