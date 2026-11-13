@@ -194,11 +194,17 @@
   #idle { display: grid; place-items: center; }
   #idle .body { transition: opacity 600ms var(--out), filter 600ms var(--out); }
   body.listening #idle .body, body.listening #clock { opacity: .35; filter: blur(.4vmin); }
+  /* O relógio fica fora das telas e vale para todas: no centro do topo na espera,
+     e no canto direito (menor) na tela da música, onde não encosta na capa nem no texto */
   #clock {
-    position: absolute; top: 5.5vmin; left: 0; right: 0; text-align: center;
+    position: fixed; z-index: 2; top: 5.5vmin; left: 50%; pointer-events: none;
+    transform: translateX(-50%); transform-origin: right top; white-space: nowrap;
     font-size: clamp(22px, 5.2vmin, 64px); font-weight: 250; font-stretch: 80%; letter-spacing: .02em;
     color: var(--muted); font-variant-numeric: tabular-nums;
-    transition: opacity 600ms var(--out), filter 600ms var(--out);
+    transition: opacity 600ms var(--out), filter 600ms var(--out), left 700ms var(--out), transform 700ms var(--out);
+  }
+  @media (min-aspect-ratio: 1/1) {
+    body.playing #clock { left: calc(100% - 4vmin); transform: translateX(-100%) scale(.7); }
   }
   #recent { display: flex; justify-content: center; gap: 2.8vmin; width: 100%; padding: 0 4vw; }
   #recent figure { margin: 0; width: min(17vw, 27vh); min-width: 0; }
@@ -377,8 +383,9 @@
   </div>
 </section>
 
+<div id="clock">--:--</div>
+
 <section id="idle" class="view">
-  <div id="clock">--:--</div>
   <div class="body">
     <div class="page on" id="p-music">
       <div id="recent"></div>
