@@ -222,9 +222,12 @@ def snapshot() -> dict:
             " AND b.status NOT IN ('reading', 'rereading')"
             " GROUP BY b.id ORDER BY MAX(COALESCE(r.finished_on, '')) DESC, MAX(r.id) DESC LIMIT ?",
             (max(0, left),)).fetchall()
-        # Páginas lidas: soma das páginas dos livros lidos (relendo também já foi lido)
+        # Páginas lidas: o livro inteiro dos já lidos (relendo também já foi lido) mais a página atual
+        # dos que estão em andamento, para o total subir a cada página salva no painel
         pages_read = conn.execute(
-            "SELECT COALESCE(SUM(pages), 0) FROM books WHERE status IN ('read', 'rereading')").fetchone()[0]
+            "SELECT COALESCE(SUM(CASE WHEN status IN ('read', 'rereading') THEN COALESCE(pages, 0) ELSE 0 END), 0)"
+            " + COALESCE(SUM(CASE WHEN status IN ('reading', 'rereading') THEN page ELSE 0 END), 0)"
+            " FROM books").fetchone()[0]
     item = lambda r, now: {"id": r["id"], "title": r["title"], "cover": _cover(r), "reading": now,
                            "status": r["status"], "favorite": bool(r["favorite"]),
                            "progress": round(min(1, r["page"] / r["pages"]), 3) if now and r["pages"] else None}
