@@ -17,3 +17,15 @@ data/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Anotações e rascunhos locais (nunca vão para o GitHub)
+.archify/
+*.txt
+!backend/requirements.txt
+!frontend/fonts/OFL.txt
+.env.*
+!.env.example
+*.pem
+*.key
+id_*
+*_ed25519*
